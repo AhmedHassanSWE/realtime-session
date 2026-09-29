@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders · Live</title>
+  <link rel="stylesheet" href="/vendor/inter/index.css">
+  <link rel="stylesheet" href="/vendor/mono/400.css">
+  <link rel="stylesheet" href="/vendor/mono/600.css">
+  <link rel="stylesheet" href="/dashboard/dashboard.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <h1>Orders</h1>
+        <span class="conn" data-conn><i></i><span data-conn-text>connecting…</span></span>
+      </div>
+      <nav class="transports" data-transports>
+        <button data-t="polling" style="--tc:var(--c-poll)"><i></i>Polling</button>
+        <button data-t="longpoll" style="--tc:var(--c-long)"><i></i>Long polling</button>
+        <button data-t="sse" style="--tc:var(--c-sse)"><i></i>SSE</button>
+        <button data-t="ws" style="--tc:var(--c-ws)"><i></i>WebSocket</button>
+        <button data-t="realtime" style="--tc:var(--c-db)"><i></i>Realtime DB</button>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="panel orders">
+        <div class="thead">
+          <span>Order</span><span>Customer</span><span>Total</span><span>Payment</span><span>Status</span>
+        </div>
+        <div class="rows" data-rows></div>
+        <div class="peek"><span class="peek-k">client code</span><code data-peek></code></div>
+      </section>
+
+      <aside class="side">
+        <div class="metrics">
+          <div class="metric"><div class="n" data-m="requests">0</div><div class="l">HTTP requests</div></div>
+          <div class="metric"><div class="n" data-m="empty">0</div><div class="l">Empty (304 / 204)</div></div>
+          <div class="metric"><div class="n" data-m="messages">0</div><div class="l">Pushed messages</div></div>
+          <div class="metric"><div class="n" data-m="latency">—</div><div class="l">Avg latency</div></div>
+        </div>
+        <div class="panel log">
+          <div class="log-h"><span>Event pipeline</span><span class="legend"><b style="--c:var(--c-hook)">stripe</b><b style="--c:var(--c-ws)">backend</b><b style="--c:var(--c-poll)">db</b><b style="--c:var(--c-db)">cdc</b><b style="--c:#fff">client</b></span></div>
+          <div class="log-body" data-log></div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="controls">
+      <button data-action="kitchen" class="toggle"><i></i>Kitchen</button>
+      <button data-action="advance">Advance an order</button>
+      <span class="gap"></span>
+      <button data-action="pay" class="hook">Stripe: pay #1023</button>
+      <button data-action="forge" class="hook-ghost">Forge webhook</button>
+      <span class="gap"></span>
+      <button data-action="drop" class="danger">Drop connections</button>
+      <button data-action="reset" class="ghost">Reset</button>
+    </footer>
+  </div>
+  <script type="module" src="/dashboard/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Web: Communication, Data &amp; Events</title>
+  <link rel="stylesheet" href="/vendor/inter/index.css">
+  <link rel="stylesheet" href="/vendor/serif/400-italic.css">
+  <link rel="stylesheet" href="/vendor/serif/400.css">
+  <link rel="stylesheet" href="/vendor/mono/400.css">
+  <link rel="stylesheet" href="/vendor/mono/500.css">
+  <link rel="stylesheet" href="/vendor/mono/600.css">
+  <link rel="stylesheet" href="/vendor/reveal/dist/reveal.css">
+  <link rel="stylesheet" href="/css/deck.css">
+</head>
+<body>
+  <div class="ambient"></div>
+
+  <div class="reveal">
+    <div class="slides">
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 0 · INTRO (0–5)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-ws" data-chapter="0" data-stage="lobby">
+  <div class="eyebrow"><span class="chip">Frontend Chapter</span><span class="sep"></span>Tech session</div>
+  <div class="title-grid">
+    <div>
+      <h1>Real-Time Web<em>Communication, Data &amp; Events</em></h1>
+      <p class="title-sub">From polling to WebSockets, real-time databases and webhooks — and how they fit into one architecture.</p>
+      <div class="title-meta">
+        <div>Speaker<b>Ahmed Hassan</b></div>
+        <div>Format<b>60 min · live demo</b></div>
+        <div>Bring<b>Your phone</b></div>
+      </div>
+    </div>
+    <div class="terminal">
+      <div class="tbar"><i></i><i></i><i></i><span>~/realtime — event stream</span></div>
+      <div class="tbody" data-ticker></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 0:00 — 30 seconds.
+Don't read the title. Open with why this talk exists: every few months someone on a team says "we need WebSockets" and nobody asks what problem that solves.
+Promise: one story, not a list of APIs. By the end they'll have watched a real payment webhook flip a UI in this room, triggered by one of them.
+The terminal on the right is the whole talk in miniature: messages from three layers — transport, database change feed, and webhooks. Say "by minute 50, every line in there will make sense."
+Next: get their phones out immediately, while energy is high.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="0" data-stage="lobby">
+  <div class="eyebrow"><span class="chip">Before we start</span></div>
+  <div class="split r-wide center">
+    <div class="stack lg">
+      <h2>Take out your phone.<br><em>This talk is live.</em></h2>
+      <p class="lead">Scan the code. Your phone connects to this laptop over the Wi-Fi and stays connected for the whole session.</p>
+      <ul class="points sm">
+        <li><span>Tap a reaction any time. It lands on this screen in real time.</span></li>
+        <li><span>You'll vote twice. The results are pushed back live.</span></li>
+        <li><span>Near the end, <b>one of you will pay for a pizza</b> — and we'll watch a webhook update the UI.</span></li>
+      </ul>
+      <div class="counter live-only">
+        <span class="n" data-live="count">0</span>
+        <span class="l">phones connected<br><span class="muted small">keep the tab open</span></span>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="qr-card">
+        <img class="live-only" data-live="qr" alt="Join QR code">
+        <div class="qr-offline live-fallback">Live audience features need the local server.<br><br>Run <b>npm start</b> and open the deck from http://localhost:4173</div>
+        <div class="url live-only" data-live="join-url">…</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 0:30 — give this a full 90 seconds. People need time to scan.
+Say: "Keep the tab open. It will change as we move through the talk. I'm not going to tell you how it works yet — that's a spoiler for minute 19."
+Watch the counter climb. When reactions start flying, react to them — it breaks the ice.
+If the Wi-Fi isolates clients (corporate networks often do): run the server behind a tunnel (see README, PUBLIC_URL) or just continue — the deck works without phones.
+Don't explain SSE here. The reveal later is much better if they don't know.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="0" data-stage="poll:opening">
+  <div class="eyebrow"><span class="chip">Vote on your phone</span></div>
+  <div class="split center">
+    <div class="stack lg">
+      <h2>How does your browser know that something changed on the server <em>without you refreshing?</em></h2>
+      <p class="lead narrow">There's a correct answer. It's the least satisfying one on the list.</p>
+    </div>
+    <div class="stack">
+      <div class="poll live-only" data-poll="opening"></div>
+      <div class="poll-meta live-only"><span data-poll-total="opening">0</span> votes · updating live</div>
+      <div class="card live-fallback">
+        <p>Ask the room for a show of hands: WebSockets? Polling? Server-Sent Events? “It depends”?</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 2:00 — 60 seconds.
+Let the bars move. Most rooms pick WebSockets. Read the result out loud: "OK — most of you said WebSockets. Hold that thought."
+The satisfying-but-true answer is "depends on the problem". The browser doesn't observe the server. Something has to exist: a loop that asks, a request held open, a stream, or a socket. And sometimes the change didn't even start on our server.
+Don't resolve it now. This question is the spine of the talk. Transition: "Let's look at what we're actually building."
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="0">
+  <div class="eyebrow"><span class="chip">What is real-time?</span></div>
+  <h2>You already ship real-time. It just <em>isn't one thing.</em></h2>
+  <div class="body">
+    <div class="grid-4" style="flex:1">
+      <div class="card ex"><h3>Chat</h3><p>New messages, typing indicators, read receipts. Both people are sending all the time.</p><div class="meta"><span class="pill c" style="--pc:var(--c-ws)">&lt; 200 ms</span><span class="pill">both ways</span></div></div>
+      <div class="card ex"><h3>Notifications</h3><p>A badge count or a toast appears while you're doing something else.</p><div class="meta"><span class="pill c" style="--pc:var(--c-sse)">seconds</span><span class="pill">server → you</span></div></div>
+      <div class="card ex"><h3>Live dashboards</h3><p>Error rates, sales, queue sizes. Nobody expects millisecond accuracy.</p><div class="meta"><span class="pill c" style="--pc:var(--c-poll)">1–10 s</span><span class="pill">server → you</span></div></div>
+      <div class="card ex"><h3>Delivery tracking</h3><p>The courier moves on a map. The customer only watches.</p><div class="meta"><span class="pill c" style="--pc:var(--c-sse)">2–5 s</span><span class="pill">server → you</span></div></div>
+      <div class="card ex"><h3>Payment status</h3><p>“Pending” becomes “Paid” — but the payment happened at Stripe, not on our server.</p><div class="meta"><span class="pill c" style="--pc:var(--c-hook)">1–3 s</span><span class="pill">3rd party → us → you</span></div></div>
+      <div class="card ex"><h3>Market prices</h3><p>Hundreds of ticks per second. Stale data here costs money.</p><div class="meta"><span class="pill c" style="--pc:var(--c-ws)">&lt; 100 ms</span><span class="pill">high volume</span></div></div>
+      <div class="card ex"><h3>AI streaming</h3><p>Tokens appear as the model generates them. One request, a long answer.</p><div class="meta"><span class="pill c" style="--pc:var(--c-sse)">first token</span><span class="pill">one stream</span></div></div>
+      <div class="card ex"><h3>Collaborative editing</h3><p>Two cursors in one document. Every keystroke is an event.</p><div class="meta"><span class="pill c" style="--pc:var(--c-ws)">&lt; 100 ms</span><span class="pill">both ways</span></div></div>
+    </div>
+    <p class="lead" style="margin-top:26px">Look at the pills: <b>different latency budgets</b>, <b>different directions</b>, <b>different places where the change starts</b>. That's why “just use WebSockets” is not an answer.</p>
+  </div>
+  <aside class="notes">
+⏱ 3:00 — 45 seconds. Don't read eight cards.
+Point at the pills instead: "Chat needs both directions under 200ms. A dashboard is fine at 10 seconds. Payment status doesn't even start on our server."
+Question for the room: "Which of these have you built with setInterval and hoped for the best?" — usually gets a laugh.
+Key sentence: the product requirement is the same — the UI reflects a change the user didn't initiate. The right technology is not the same.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="0">
+  <div class="eyebrow"><span class="chip">What is real-time?</span></div>
+  <h2>The web was built for <em>asking.</em> Real-time needs <em>telling.</em></h2>
+  <div class="body">
+    <div class="split">
+      <div class="card flat stack roomy">
+        <div class="k" style="color:var(--c-http)">Traditional web · request / response</div>
+        <div class="flow h" style="gap:0;margin:22px 0 12px">
+          <div class="node sm n-http"><span class="role">Client</span><b>asks</b></div>
+          <div class="link h" style="--lc:var(--c-http)"><span class="lbl">GET /orders</span></div>
+          <div class="node sm n-http"><span class="role">Server</span><b>answers</b></div>
+        </div>
+        <p><b>The client always initiates.</b> The server can only respond to a question it was asked — it has no way to start a conversation.</p>
+        <p>After the response, the client holds a <b>snapshot</b>. It starts going stale the moment it arrives, and nothing tells the page.</p>
+        <p class="muted">Still the right model for 90% of what we build: pages, forms, search, CRUD.</p>
+      </div>
+      <div class="card accented stack roomy">
+        <div class="k">Real-time web · event-driven</div>
+        <ol class="points num" style="gap:18px;margin-top:10px">
+          <li><span><b>Something happens.</b> A row changes, a payment clears, another user types.</span></li>
+          <li><span><b>The system detects it.</b> Your API, the database's change log, or a third-party service like Stripe.</span></li>
+          <li><span><b>The client gets notified.</b> A pushed message — or it finds out on its next ask.</span></li>
+          <li><span><b>The UI updates.</b> Patch the cache, re-render, maybe animate the change.</span></li>
+        </ol>
+        <p class="push-bottom" style="color:var(--ink)">The initiator flips: <b>the world starts the conversation</b>, not the user.</p>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:22px">Every technique in this talk is a different answer to one question: <b>after step 2, who tells the browser — and how fast?</b></div>
+  </div>
+  <aside class="notes">
+⏱ 3:45 — 30 seconds.
+Left is not "legacy". It is the web, and it's fine.
+Right: stress step 2 — "the system detects it". That system might be our API, Postgres, or Stripe. Frontend engineers usually only see step 3 and 4, which is why we end up solving the wrong problem.
+Transition: so what is "real-time", really?
+  </aside>
+</section>
+
+<section class="t-ws center" data-chapter="0">
+  <div class="eyebrow"><span class="chip">The thesis</span></div>
+  <p class="statement">Real-time is a <em>requirement,</em><br>not a technology.</p>
+  <p class="lead" style="margin-top:26px">Before anyone says “WebSocket”, answer three questions about the feature:</p>
+  <div class="grid-3" style="margin-top:30px">
+    <div class="card"><div class="k">01 · How fresh?</div><h3>What staleness can the user tolerate?</h3><p>30 seconds and 100 milliseconds are completely different systems — with completely different costs.</p></div>
+    <div class="card"><div class="k">02 · Which direction?</div><h3>Server → client only, or both ways?</h3><p>Watching a delivery and co-editing a document are not the same problem.</p></div>
+    <div class="card"><div class="k">03 · Where does it start?</div><h3>In your backend, your database, or someone else's system?</h3><p>That decides which layer you build — and whether the browser is even involved yet.</p></div>
+  </div>
+  <aside class="notes">
+⏱ 4:15 — say the headline slowly. It's the one sentence I want people to repeat after the talk.
+Every technology in this talk is an answer to these three questions. If you can't answer them for your feature, you're not ready to pick a library.
+Transition: these three questions map to three problems.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="0">
+  <div class="eyebrow"><span class="chip">The map</span><span class="sep"></span>Agenda</div>
+  <h2>Three problems. <em>One system.</em></h2>
+  <div class="body">
+    <div class="grid-3" style="flex:1">
+      <div class="card stack sm" style="--accent:var(--c-sse)">
+        <div class="k">01 · Communication · 5–20 min</div>
+        <h3>How does the server reach the browser?</h3>
+        <div class="flow h" style="gap:0;margin:14px 0"><div class="node sm n-ws"><b>Server</b></div><div class="link h" style="--lc:var(--c-ws)"></div><div class="node sm n-ui"><b>Browser</b></div></div>
+        <p>The transport layer. Who opens the connection, how long it lives, which way data flows.</p>
+        <ul class="points sm" style="gap:10px;margin-top:6px">
+          <li><span>Why polling is still fine</span></li>
+          <li><span>The underrated one: SSE</span></li>
+          <li><span>WebSockets in production</span></li>
+        </ul>
+        <div class="row push-bottom"><span class="pill c" style="--pc:var(--c-poll)">Polling</span><span class="pill c" style="--pc:var(--c-long)">Long polling</span><span class="pill c" style="--pc:var(--c-sse)">SSE</span><span class="pill c" style="--pc:var(--c-ws)">WebSocket</span></div>
+      </div>
+      <div class="card stack sm" style="--accent:var(--c-db)">
+        <div class="k">02 · Data · 20–32 min</div>
+        <h3>How does the UI react when data changes?</h3>
+        <div class="flow h" style="gap:0;margin:14px 0"><div class="node sm n-db"><b>Database</b></div><div class="link h" style="--lc:var(--c-db)"></div><div class="node sm n-ui"><b>Browser</b></div></div>
+        <p>A higher-level abstraction: subscribe to data, and let a platform own the pipe.</p>
+        <ul class="points sm" style="gap:10px;margin-top:6px">
+          <li><span>Change data capture</span></li>
+          <li><span>Supabase Realtime, line by line</span></li>
+          <li><span>What the frontend still owns</span></li>
+        </ul>
+        <div class="row push-bottom"><span class="pill c" style="--pc:var(--c-db)">Supabase Realtime</span><span class="pill c" style="--pc:var(--c-db)">Firestore</span><span class="pill c" style="--pc:var(--c-db)">Convex</span></div>
+      </div>
+      <div class="card stack sm" style="--accent:var(--c-hook)">
+        <div class="k">03 · Integrations · 32–42 min</div>
+        <h3>How does another system tell <i>our</i> backend?</h3>
+        <div class="flow h" style="gap:0;margin:14px 0"><div class="node sm n-hook"><b>Stripe</b></div><div class="link h" style="--lc:var(--c-hook)"></div><div class="node sm n-ws"><b>Backend</b></div></div>
+        <p>Events that start outside our system entirely: payments, PRs, orders, messages.</p>
+        <ul class="points sm" style="gap:10px;margin-top:6px">
+          <li><span>Signatures &amp; trust</span></li>
+          <li><span>Retries and duplicates</span></li>
+          <li><span>From webhook to pixel</span></li>
+        </ul>
+        <div class="row push-bottom"><span class="pill c" style="--pc:var(--c-hook)">Webhooks</span><span class="pill c" style="--pc:var(--c-hook)">Event-driven</span></div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:24px">Then we connect all three into one architecture, <b>run it live</b>, and finish with how to choose.</p>
+  </div>
+  <aside class="notes">
+⏱ 4:40 — 20 seconds. You should hit minute 5 on the next slide.
+Point at the three little diagrams: server→browser, database→browser, third party→backend. Different arrows, different problems.
+Question if time: "Which of these three is hurting your team this quarter?"
+Transition: start at the bottom — bytes on the wire.
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 1 · COMMUNICATION (5–20)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-sse opener" data-chapter="1">
+  <div class="num">01</div>
+  <h2>Real-Time<br>Communication</h2>
+  <p class="lead">Something changed on the server. <b>How does the browser find out?</b> Every answer below exists because the previous one hurt.</p>
+  <div class="row roadmap">
+    <span class="pill c" style="--pc:var(--c-http)">HTTP</span><span class="muted">→</span>
+    <span class="pill c" style="--pc:var(--c-poll)">Polling</span><span class="muted">→</span>
+    <span class="pill c" style="--pc:var(--c-long)">Long polling</span><span class="muted">→</span>
+    <span class="pill c" style="--pc:var(--c-sse)">Server-Sent Events</span><span class="muted">→</span>
+    <span class="pill c" style="--pc:var(--c-ws)">WebSocket</span>
+  </div>
+  <aside class="notes">
+⏱ 5:00 — 15 seconds.
+This section is a constraint ladder, not a history lesson. Each step fixes the pain of the last one and introduces new pain.
+Heads-up for the room: WebSockets come last, not first — and SSE is going to surprise some of you.
+Notice the colour per technique — it stays consistent for the whole talk, including the demo.
+  </aside>
+</section>
+
+<section class="t-sse" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Communication</span><span class="sep"></span>Twenty years in one slide</div>
+  <h2>We kept holding the connection open <em>a little longer.</em></h2>
+  <div class="body">
+    <div class="timeline">
+      <div class="tl" style="--tc:var(--c-http)"><div class="yr">1991 – 1996</div><div class="dot"></div><h3>HTTP</h3><p>Ask, receive, disconnect. Built for documents, not updates.</p><div class="why">Pain: the page can't know anything changed.</div><div class="still"><b>Still used for</b>Almost everything. Pages, forms, REST.</div></div>
+      <div class="tl" style="--tc:var(--c-poll)"><div class="yr">2004 – 2005</div><div class="dot"></div><h3>Polling</h3><p>XMLHttpRequest lets a page ask again without reloading. Gmail makes it mainstream; “Ajax” gets its name.</p><div class="why">Pain: most answers are “nothing new”.</div><div class="still"><b>Still used for</b>Dashboards, refetch-on-focus, React Query.</div></div>
+      <div class="tl" style="--tc:var(--c-long)"><div class="yr">2006</div><div class="dot"></div><h3>Long polling</h3><p>“Comet”: the server holds the request until it has news. Early web chat is built on it.</p><div class="why">Pain: one new request per event.</div><div class="still"><b>Still used for</b>Socket.IO's first transport, locked-down networks.</div></div>
+      <div class="tl" style="--tc:var(--c-sse)"><div class="yr">2006 – 2011</div><div class="dot"></div><h3>Server-Sent Events</h3><p>Opera experiments with it in 2006; HTML5 standardises it as <code>EventSource</code>.</p><div class="why">Pain: the client can't talk back on it.</div><div class="still"><b>Still used for</b>AI token streams, notifications, progress.</div></div>
+      <div class="tl" style="--tc:var(--c-ws)"><div class="yr">2011</div><div class="dot"></div><h3>WebSocket</h3><p>RFC 6455. One TCP connection, messages in both directions, any time.</p><div class="why">Pain: you now own a stateful connection.</div><div class="still"><b>Still used for</b>Chat, multiplayer, collaboration, trading.</div></div>
+    </div>
+    <div class="callout push-bottom"><b>None of these died.</b> All five ship in production today, often in the same product. The skill is knowing which pain you're willing to accept.</div>
+  </div>
+  <aside class="notes">
+⏱ 5:20 — 60 seconds. Walk left to right reading only the "Pain" lines. That's the story.
+Fun fact for seniors: Socket.IO still starts every connection with HTTP long polling and upgrades to WebSocket afterwards. Old techniques become fallbacks, not fossils.
+Transition: start with the constraint that created all of this — plain HTTP.
+  </aside>
+</section>
+
+<section class="t-http" data-chapter="1">
+  <div class="eyebrow"><span class="chip">HTTP</span><span class="sep"></span>The baseline</div>
+  <div class="split r-wide">
+    <div class="stack lg">
+      <h2>The browser only knows <em>what it asked for.</em></h2>
+      <ul class="points">
+        <li><span><b>Request → response → done.</b> HTTP has no “subscribe”. The server can't start a conversation.</span></li>
+        <li><span><b>The response is a snapshot.</b> It starts going stale the moment it arrives.</span></li>
+        <li><span><b>Nothing reaches the page</b> unless the page asks again. Watch the server change on the right.</span></li>
+      </ul>
+      <div class="callout">If an order ships 200 ms after your <code>GET /orders</code>, <b>who tells the UI?</b> Nobody — unless we add a mechanism. That mechanism is the rest of this section.</div>
+    </div>
+    <div class="sim" data-sim="http"></div>
+  </div>
+  <aside class="notes">
+⏱ 6:20 — 40 seconds.
+Let the animation run: one request, one response, then the server's version keeps climbing while the browser sits on v1 marked "stale".
+Don't bash REST. REST is great at "give me the world as of now". It's silent about "tell me when the world moves".
+Transition: the obvious fix — ask again. And again.
+  </aside>
+</section>
+
+<section class="t-poll" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Polling</span><span class="sep"></span>Ask on a timer</div>
+  <div class="split r-wide">
+    <div class="stack lg">
+      <h2>Polling: <em>“are we there yet?”</em></h2>
+      <p class="lead">The browser asks the same question on a timer. The server answers with whatever it has — usually nothing new.</p>
+      <ol class="points num sm">
+        <li><span>Every <b>N seconds</b>, send <code>GET /orders</code>.</span></li>
+        <li><span>If something changed, re-render. If not, the request was <b>wasted</b>.</span></li>
+        <li><span>A change waits for the next tick: <b>worst-case latency = the interval</b>.</span></li>
+      </ol>
+      <div class="analogy"><div class="k">Analogy</div><p>A kid in the back seat asking “are we there yet?” every five minutes. Simple, a bit annoying, and the answer is usually no.</p></div>
+    </div>
+    <div class="sim" data-sim="polling"></div>
+  </div>
+  <aside class="notes">
+⏱ 7:00 — 75 seconds. Let the simulation run and read the stats as they climb.
+Point at "Empty responses" — usually 60–80%. Point at "Avg delay" — about half the interval.
+Watch for the moment the server bubble says there's news and the browser is marked stale until the next tick. Narrate that gap: "the data exists, the user can't see it."
+Polling isn't shameful. It's the honest first solution because it uses the model we already have.
+  </aside>
+</section>
+
+<section class="t-poll" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Polling</span><span class="sep"></span>Doing it well</div>
+  <h2>Polling is <em>often the right answer.</em></h2>
+  <div class="body">
+    <div class="split l-wide top">
+      <div class="stack">
+        <div class="codebox sm"><span class="file">poll.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+let etag;
+
+async function poll() {
+  const res = await fetch('/api/orders', {
+    headers: etag ? { 'If-None-Match': etag } : {},
+  });
+
+  if (res.status === 200) {
+    etag = res.headers.get('ETag');
+    render(await res.json());
+  } // 304 → nothing changed, almost free
+
+  // setTimeout, not setInterval: requests never pile up
+  setTimeout(poll, document.hidden ? 30_000 : 5_000);
+}
+
+poll();
+</code></pre>
+        </div>
+        <div class="callout"><b>The math:</b> 1,000 open tabs polling every 5 s is <b>12,000 requests a minute</b> — even when nothing happened.</div>
+      </div>
+      <div class="stack lg">
+        <div class="proscons">
+          <div class="pro"><h4>Why it's great</h4><ul>
+            <li>Works through every proxy, CDN and auth setup you have</li>
+            <li>Stateless servers, trivial to scale and cache</li>
+            <li>Survives flaky networks by design</li>
+          </ul></div>
+          <div class="con"><h4>What it costs</h4><ul>
+            <li>Latency is the interval; average is half of it</li>
+            <li>Load tracks clients × time, not real events</li>
+            <li>Battery and data on mobile</li>
+          </ul></div>
+        </div>
+        <div class="card flat">
+          <div class="k">Good fit</div>
+          <p>Admin pages, reports, “last updated 30 s ago” dashboards, anything where a human isn't staring at a spinner.</p>
+        </div>
+        <div class="card flat">
+          <div class="k">Three habits</div>
+          <p><code>setTimeout</code> chains · back off when <code>document.hidden</code> · <code>ETag</code> / <code>304</code> so “no change” costs almost nothing.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 8:15 — 60 seconds.
+Walk the three habits in the code: ETag makes "no change" cheap, setTimeout avoids overlapping requests on slow networks, and hidden tabs back off to 30s.
+Ask the room: "What is an acceptable staleness window for your product?" That one number often kills a WebSocket proposal — or justifies it.
+React Query's refetchInterval and refetchOnWindowFocus are polling. Most of us already use it, and it's fine.
+Transition: can we keep HTTP but stop asking when there's nothing to say?
+  </aside>
+</section>
+
+<section class="t-long" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Long polling</span><span class="sep"></span>Ask, then wait</div>
+  <div class="split r-wide">
+    <div class="stack">
+      <h2>Long polling: <em>wait until there's news.</em></h2>
+      <p class="lead">The browser asks once. The server <b>holds the request open</b> until there's news — or a timeout. Then the browser immediately asks again.</p>
+      <div class="grid-2">
+        <div class="card tight"><div class="k" style="color:var(--c-db)">What it fixed</div><p>Near-instant delivery. No more empty answers every 5 s.</p></div>
+        <div class="card tight"><div class="k" style="color:var(--c-bad)">What still hurts</div><p>A full HTTP request per event: headers, cookies, auth.</p></div>
+        <div class="card tight"><div class="k" style="color:var(--c-bad)">The gap</div><p>Events between two requests need a cursor: <code>?since=42</code></p></div>
+        <div class="card tight"><div class="k" style="color:var(--c-bad)">Infrastructure</div><p>Proxies kill idle requests after 30–60 s.</p></div>
+      </div>
+      <div class="analogy"><div class="k">Analogy</div><p>A waiter who stands at your table until the kitchen is ready.</p></div>
+    </div>
+    <div class="sim" data-sim="longpoll"></div>
+  </div>
+  <aside class="notes">
+⏱ 9:15 — 75 seconds.
+In the simulation, watch the request "park" at the server with a pulsing ring. When the server has news it answers instantly — delay drops to travel time. When the timeout hits, an empty response goes back and the browser re-asks.
+The gap card is the subtle one: after a response and before the next request arrives, the client isn't listening. You need a cursor (version/timestamp) so the server can say "here's what you missed".
+This is how Comet-era chat worked, and it's still the fallback transport in Socket.IO.
+Transition: what if the connection didn't have to end after every event?
+  </aside>
+</section>
+
+<section class="t-sse" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Server-Sent Events</span><span class="sep"></span>The underrated one</div>
+  <div class="split r-wide">
+    <div class="stack lg">
+      <h2>Server-Sent Events: <em>the server keeps talking.</em></h2>
+      <p class="lead">One HTTP request. The response <b>never ends</b>. The server writes events into it whenever it wants.</p>
+      <ul class="points sm">
+        <li><span><b>Plain HTTP.</b> Your cookies, proxies, load balancers and HTTP/2 just work.</span></li>
+        <li><span><b>One direction: server → client.</b> Client writes stay normal <code>fetch()</code> calls.</span></li>
+        <li><span><b>The browser reconnects for you</b> and tells the server the last event it saw, so nothing is lost.</span></li>
+      </ul>
+      <div class="analogy"><div class="k">Analogy</div><p>A radio station. You tune in once, then just listen. If the signal drops, the radio finds the station again.</p></div>
+    </div>
+    <div class="sim" data-sim="sse"></div>
+  </div>
+  <aside class="notes">
+⏱ 10:30 — 75 seconds. This is the most underused tool in the room.
+Let the simulation reach the connection drop: the line breaks red, the browser waits for "retry", reconnects with Last-Event-ID, and the server replays what was missed. You didn't write any of that reconnection code — EventSource did.
+Constraint on purpose: the client can't send on this connection. For "send a chat message" you POST. That's often a feature — you keep REST for writes, with all its validation and auth.
+Transition: let's look at what's actually on the wire — it's embarrassingly simple.
+  </aside>
+</section>
+
+<section class="t-sse" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Server-Sent Events</span><span class="sep"></span>Under the hood</div>
+  <h2>It's just text over HTTP. <em>That's the point.</em></h2>
+  <div class="body">
+    <div class="split top">
+      <div class="stack">
+        <div class="codebox"><span class="file">what the server writes</span>
+<pre class="wire-text"><code class="nohighlight" data-trim data-noescape>
+<span class="h">HTTP/1.1 200 OK</span>
+<span class="h">Content-Type:</span> <span class="v">text/event-stream</span>
+
+<span class="x">retry:</span> 2000
+
+<span class="x">id:</span> 41
+<span class="x">event:</span> order-updated
+<span class="x">data:</span> {"id":1024,"status":"on_the_way"}
+
+<span class="x">id:</span> 42
+<span class="x">event:</span> order-updated
+<span class="x">data:</span> {"id":1025,"status":"delivered"}
+
+<span class="c">: blank line = end of event. connection stays open…</span>
+</code></pre>
+        </div>
+        <div class="kv" style="margin-top:6px">
+          <dt>id:</dt><dd>Sent back as <code>Last-Event-ID</code> on reconnect, so the server can replay.</dd>
+          <dt>event:</dt><dd>Named events → separate listeners on the client.</dd>
+          <dt>retry:</dt><dd>How long the browser waits before reconnecting.</dd>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="codebox"><span class="file">orders.js — the whole client</span>
+<pre><code class="language-js" data-trim data-noescape>
+const source = new EventSource('/api/orders/stream');
+
+source.addEventListener('order-updated', (e) => {
+  const order = JSON.parse(e.data);
+
+  queryClient.setQueryData(['orders'], (list) =>
+    list.map((o) => (o.id === order.id ? order : o))
+  );
+});
+
+source.onerror = () => showBanner('Reconnecting…');
+// no reconnect loop needed — EventSource does it
+</code></pre>
+        </div>
+        <div class="callout">No library. No protocol to design. No reconnect logic. <b>About ten lines</b> for a live, self-healing feed.</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 11:45 — 60 seconds.
+Point at the blank line between events — that's the whole framing format. You can literally curl this endpoint and read it.
+The id → Last-Event-ID loop is the killer feature. It gives you resumable streams for free, if your server can replay from an id.
+Client side: the handler writes straight into the React Query cache. The UI doesn't know or care that it came from a stream.
+  </aside>
+</section>
+
+<section class="t-sse" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Server-Sent Events</span><span class="sep"></span>When to reach for it</div>
+  <h2>Server → client only? <em>Reach for SSE first.</em></h2>
+  <div class="body" style="gap:22px">
+    <div class="split top" style="flex:none;gap:22px">
+      <div class="card accented stack sm">
+        <div class="k">Where SSE shines</div>
+        <ul class="points sm" style="gap:12px">
+          <li><span><b>Notifications &amp; feeds</b> — badges, toasts, “someone commented”.</span></li>
+          <li><span><b>Dashboards</b> — the server decides when numbers change.</span></li>
+          <li><span><b>Progress</b> — uploads, exports, CI builds, long jobs.</span></li>
+          <li><span><b>Log tailing</b> — append-only, ordered, resumable by id.</span></li>
+        </ul>
+      </div>
+      <div class="card stack sm">
+        <div class="k" style="color:var(--c-poll)">Gotchas worth knowing</div>
+        <ul class="points sm" style="--accent:var(--c-poll);gap:12px">
+          <li><span><code>EventSource</code> <b>can't set headers</b> — use cookies, or <code>fetch()</code> + a reader.</span></li>
+          <li><span><b>Text only.</b> Binary needs base64 — or a WebSocket.</span></li>
+          <li><span><b>~6 connections per domain</b> on HTTP/1.1, shared by tabs. HTTP/2 fixes it.</span></li>
+          <li><span><b>Proxies may buffer.</b> Send <code>X-Accel-Buffering: no</code>.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="split top" style="gap:22px;grid-template-columns:1.1fr 0.9fr">
+      <div class="codebox sm"><span class="file">chat.js — reading an AI response as it streams</span>
+<pre><code class="language-js" data-trim data-noescape>
+const res = await fetch('/api/chat', { method: 'POST', body });
+const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+
+for (;;) {
+  const { value, done } = await reader.read();
+  if (done) break;
+  appendTokens(value);   // "data: {…}\n\n" chunks, as generated
+}
+</code></pre>
+      </div>
+      <div class="card flat stack sm" style="--accent:var(--c-sse)">
+        <div class="k">The one you use every day</div>
+        <p><b>ChatGPT-style token streaming</b> is SSE framing over a <code>POST</code>. <code>EventSource</code> only does <code>GET</code>, so AI UIs read the same format with <code>fetch</code> and a stream reader.</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 12:45 — 45 seconds.
+Ask: "How many of our 'we need WebSockets' tickets were actually SSE?" Let it hang for a second.
+AI streaming: OpenAI-style APIs stream with SSE framing over a POST. The browser's EventSource only does GET, so AI UIs usually use fetch + ReadableStream to read the same format. Same idea, different reader.
+The six-connection limit is the classic bug: seven tabs open on HTTP/1.1 and the seventh hangs. HTTP/2 fixes it.
+Transition: now — what if both sides need to talk?
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="1">
+  <div class="eyebrow"><span class="chip">WebSocket</span><span class="sep"></span>Full duplex</div>
+  <div class="split r-wide">
+    <div class="stack lg">
+      <h2>WebSockets: <em>a phone call,</em> not letters.</h2>
+      <p class="lead">Starts as an HTTP request, then <b>upgrades</b> into a persistent connection where either side can send a message at any moment.</p>
+      <ul class="points sm">
+        <li><span><b>One TCP connection, both directions.</b> Framing overhead is 2–14 bytes per message instead of a full set of HTTP headers.</span></li>
+        <li><span><b>No request/response.</b> There are no status codes per message — you design the protocol: types, acks, versions.</span></li>
+        <li><span><b>Text or binary frames</b>, with ping/pong control frames built in.</span></li>
+      </ul>
+      <div class="analogy"><div class="k">Analogy</div><p>A phone call. Once it connects, anyone can talk at any time — but someone has to notice when the line goes dead.</p></div>
+    </div>
+    <div class="sim" data-sim="ws"></div>
+  </div>
+  <aside class="notes">
+⏱ 13:30 — 75 seconds. Slow down: this is the deepest topic in the section.
+The simulation starts with the Upgrade handshake, then the wire "opens" and messages flow both ways. The small grey packets are heartbeats.
+Key idea: WebSocket is a transport, not a protocol. Once it's open you're on your own — message types, correlation ids, acknowledgements, versioning. That's work people forget to estimate.
+Use it when the client streams to the server too: chat with typing, presence, games, collaborative editing, trading.
+Don't go into server scaling (sticky sessions, pub/sub between nodes). If asked: "that's a backend session".
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="1">
+  <div class="eyebrow"><span class="chip">WebSocket</span><span class="sep"></span>The handshake</div>
+  <h2>It starts as HTTP, then <em>stops being HTTP.</em></h2>
+  <div class="body">
+    <div class="split top">
+      <div class="stack">
+        <div class="codebox md"><span class="file">browser → server</span>
+<pre class="wire-text"><code class="nohighlight" data-trim data-noescape>
+<span class="h">GET</span> /ws <span class="h">HTTP/1.1</span>
+<span class="h">Host:</span> api.example.com
+<span class="h">Upgrade:</span> <span class="v">websocket</span>
+<span class="h">Connection:</span> <span class="v">Upgrade</span>
+<span class="h">Sec-WebSocket-Key:</span> dGhlIHNhbXBsZSBub25jZQ==
+<span class="h">Sec-WebSocket-Version:</span> 13
+<span class="h">Cookie:</span> session=…
+</code></pre>
+        </div>
+        <div class="codebox md"><span class="file">server → browser</span>
+<pre class="wire-text"><code class="nohighlight" data-trim data-noescape>
+<span class="h">HTTP/1.1</span> <span class="x">101 Switching Protocols</span>
+<span class="h">Upgrade:</span> <span class="v">websocket</span>
+<span class="h">Connection:</span> <span class="v">Upgrade</span>
+<span class="h">Sec-WebSocket-Accept:</span> s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+<span class="c">— from here on: binary frames, both directions —</span>
+</code></pre>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card flat"><div class="k">Why start with HTTP?</div><p>Same port 443, same TLS, passes through existing infrastructure, and the browser sends your cookies — so auth can happen right here.</p></div>
+        <div class="card flat"><div class="k">After the 101</div><p>No headers per message, no status codes, no caching, no retries. Just frames. Everything HTTP gave you for free is now your job.</p></div>
+        <div class="card flat"><div class="k">Close codes to recognise</div><p><code>1000</code> normal · <code>1001</code> going away (tab closed, deploy) · <code>1006</code> abnormal — no close frame, the network simply died.</p></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 14:45 — 60 seconds.
+The Upgrade handshake is why WebSockets work almost everywhere: it looks like normal HTTPS until the 101.
+1006 is the one you'll see in production logs: laptop lid closed, train tunnel, proxy killed an idle connection. You never get a clean close, which is why heartbeats matter (next slide).
+Transition: the browser API itself is tiny. Production is everything around it.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="1">
+  <div class="eyebrow"><span class="chip">WebSocket</span><span class="sep"></span>Client &amp; production</div>
+  <h2>The API is ten lines. <em>Production is everything around it.</em></h2>
+  <div class="body">
+    <div class="split r-wide top">
+      <div class="stack">
+        <div class="codebox"><span class="file">socket.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+const socket = new WebSocket('wss://example.com');
+
+socket.onopen = () => {
+  socket.send(JSON.stringify({
+    type: 'MESSAGE',
+    payload: 'Hello'
+  }));
+};
+
+socket.onmessage = (event) => {
+  console.log(event.data);
+};
+
+socket.onclose = () => {
+  console.log('Disconnected');
+};
+</code></pre>
+        </div>
+        <div class="row">
+          <span class="pill c dot">0 · CONNECTING</span><span class="pill c dot" style="--pc:var(--c-db)">1 · OPEN</span><span class="pill c dot" style="--pc:var(--c-poll)">2 · CLOSING</span><span class="pill c dot" style="--pc:var(--c-bad)">3 · CLOSED</span>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card tight"><div class="k">Reconnection</div><p>It <b>will</b> drop. Exponential backoff plus jitter, so a deploy doesn't cause every client to reconnect in the same second.</p></div>
+        <div class="card tight"><div class="k">Resync</div><p>After reconnecting you missed events. Refetch a snapshot or send your last-seen id. Never assume continuity.</p></div>
+        <div class="card tight"><div class="k">Authentication</div><p>Cookie on the handshake, or a short-lived ticket. Tokens expire while the socket stays open — plan for re-auth.</p></div>
+        <div class="card tight"><div class="k">Heartbeats</div><p>Ping/pong every 15–30 s. Half-open connections look alive until you try to use them.</p></div>
+        <div class="card tight"><div class="k">Cleanup</div><p>Close on unmount. React Strict Mode mounts twice in dev. One socket per app, not per component.</p></div>
+        <div class="card tight"><div class="k">Failure UX</div><p>Show “reconnecting…”, disable actions that need the socket, fall back to polling if it must always work.</p></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 15:45 — 90 seconds. This is why the seniors are in the room — linger here.
+onclose fires for a clean shutdown and for a closed laptop lid. onerror is nearly useless for recovery; you recover from onclose.
+Real incidents worth a sentence each: reconnect without resync = ghost presence and duplicate toasts; every client reconnecting at the same second after a deploy = self-inflicted DDoS (that's what jitter prevents); "N sockets = tabs × components".
+A full reconnecting React hook is in the appendix at the end of the deck.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="1">
+  <div class="eyebrow"><span class="chip">Communication</span><span class="sep"></span>Side by side</div>
+  <h2>Four transports, <em>four sets of trade-offs.</em></h2>
+  <div class="body">
+    <table class="table">
+      <thead>
+        <tr><th></th><th class="th-c" style="--tc:var(--c-poll)">Polling</th><th class="th-c" style="--tc:var(--c-long)">Long polling</th><th class="th-c" style="--tc:var(--c-sse)">SSE</th><th class="th-c" style="--tc:var(--c-ws)">WebSocket</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Direction</td><td>client asks</td><td>client asks, server delays</td><td>server → client</td><td class="good">both ways</td></tr>
+        <tr><td>Latency</td><td class="bad">up to the interval</td><td class="good">near-instant</td><td class="good">instant</td><td class="good">instant</td></tr>
+        <tr><td>Connection</td><td>new request each tick</td><td>new request per event</td><td>one long HTTP response</td><td>one upgraded TCP socket</td></tr>
+        <tr><td>Reconnection</td><td class="good">nothing to reconnect</td><td>your loop</td><td class="good">built in + Last-Event-ID</td><td class="bad">yours to build</td></tr>
+        <tr><td>Infrastructure</td><td class="good">works everywhere</td><td class="meh">proxy timeouts</td><td class="meh">watch buffering</td><td class="meh">stateful, sticky, LB idle timeouts</td></tr>
+        <tr><td>Complexity</td><td class="good">lowest</td><td class="meh">medium</td><td class="good">low</td><td class="bad">highest</td></tr>
+        <tr><td>Best for</td><td>slow-changing data</td><td>fallbacks, legacy</td><td>feeds, progress, AI streams</td><td>chat, presence, collaboration</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="notes">
+⏱ 17:15 — 60 seconds. Let people photograph it.
+Read only the "Reconnection" and "Complexity" rows — those are the ones teams underestimate.
+Transition to the quiz: "Let's test it. Phones out."
+  </aside>
+</section>
+
+<section class="t-sse" data-chapter="1" data-stage="poll:quiz">
+  <div class="eyebrow"><span class="chip">Quiz · vote on your phone</span></div>
+  <div class="split center">
+    <div class="stack lg">
+      <h2>A customer watches an order-tracking page. <em>They never send anything back.</em></h2>
+      <p class="lead narrow">Which transport would you pick?</p>
+      <div class="callout fragment" data-effect="reveal-answer" data-target="quiz">
+        <b>Server-Sent Events.</b> Server → client only, auto-reconnect, plain HTTP. A WebSocket works too — you'd just be paying for a direction you never use. <span class="muted">(A realtime database subscription is also a great answer. That's the next chapter.)</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="poll live-only" data-poll="quiz" data-correct="2"></div>
+      <div class="poll-meta live-only"><span data-poll-total="quiz">0</span> votes</div>
+      <div class="card live-fallback"><p>Show of hands: polling, long polling, SSE, or WebSocket?</p></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 18:15 — 60 seconds. Give 20 seconds to vote, then click to reveal.
+If WebSocket wins: "It works! You'd just be paying for a direction you never use: stateful connections, custom reconnect, protocol design."
+If polling shows up: "Totally valid if 5 seconds of staleness is OK. That's the requirement question again."
+Transition: "Now, a confession about your phones…"
+  </aside>
+</section>
+
+<section class="t-sse" data-chapter="1" data-stage="twist">
+  <div class="eyebrow"><span class="chip">Plot twist</span></div>
+  <div class="split r-wide center">
+    <div class="stack lg">
+      <h2>Your phone has been on <em>Server-Sent Events</em> this whole time.</h2>
+      <p class="lead">Every screen change, every poll you voted in was <b>pushed with <code>EventSource</code></b>. Your votes and reactions went up as plain <code>fetch()</code> POSTs. <b>No WebSockets.</b></p>
+      <div class="counter live-only">
+        <span class="n" data-live="count">0</span>
+        <span class="l">open EventSource connections<br><span class="muted small">to this laptop, right now</span></span>
+      </div>
+      <p class="muted">The slides on this laptop <i>do</i> use a WebSocket — the presenter both sends (slide changes) and receives (your reactions) at high frequency.</p>
+    </div>
+    <div class="codebox"><span class="file">join.js — what's running on your phone</span>
+<pre><code class="language-js" data-trim data-noescape>
+// down: the server pushes the current stage
+const stream = new EventSource(
+  `/api/audience/stream?id=${clientId}`
+);
+
+stream.addEventListener('stage', (e) => {
+  render(JSON.parse(e.data)); // poll, pay, reactions…
+});
+
+// up: just POST
+function react(emoji) {
+  return fetch('/api/audience/react', {
+    method: 'POST',
+    body: JSON.stringify({ id: clientId, emoji }),
+  });
+}
+</code></pre>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 19:15 — 45 seconds. This is a big moment — pause after the headline.
+Tell them to look at their phones: the screen shows how long they've been connected and how many messages they received.
+The point: server → client push plus HTTP for the occasional write covers a huge number of "real-time" features. The presenter deck uses a WebSocket because it has high-frequency traffic in both directions. Each client got the tool that matches its direction.
+Transition: "Everything so far, we built and ran the pipe ourselves. What if we didn't want to?"
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 2 · REAL-TIME DATA (20–32)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-db opener" data-chapter="2">
+  <div class="num">02</div>
+  <h2>Real-Time<br>Data</h2>
+  <p class="lead">“What if I don't want to build and maintain all the WebSocket infrastructure myself?” <b>Let the database changes become the events.</b></p>
+  <aside class="notes">
+⏱ 20:00 — 20 seconds.
+Everything in chapter 1: we opened the connections, wrote the reconnect logic, and decided what to push and when.
+Seniors will be thinking "vendor lock-in" — acknowledge it, we'll get to the trade-offs. The lesson here is the layer, not the logo.
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Real-time data</span><span class="sep"></span>The abstraction</div>
+  <div class="split r-wide">
+    <div class="stack lg">
+      <h2>Stop owning the pipe. <em>Subscribe to the data.</em></h2>
+      <p class="lead">Databases already record every committed change in a log — Postgres calls it the <b>write-ahead log</b>. A realtime service can read that log, filter it, and fan it out to subscribed clients.</p>
+      <div class="callout">This is <b>change data capture</b>. Your backend doesn't call <code>broadcast()</code>. It just writes to the database — and every write becomes an event.</div>
+      <p class="muted">Underneath it's still WebSockets, heartbeats and reconnection. You're buying them, not deleting them.</p>
+    </div>
+    <div class="layers">
+      <div class="layer you"><div class="lname">React UI</div><div class="ldesc"><b>You write this:</b> render from a cache that gets patched by events.</div></div>
+      <div class="layer you"><div class="lname">Subscription</div><div class="ldesc"><b>You write this:</b> <code>channel.on('postgres_changes', …)</code></div></div>
+      <div class="layer managed"><div class="lname" style="color:var(--ink-3)">WebSocket</div><div class="ldesc">Connection, heartbeats, reconnect, re-join channels</div></div>
+      <div class="layer managed"><div class="lname" style="color:var(--ink-3)">Realtime service</div><div class="ldesc">Reads changes, applies filters and access rules, fans out</div></div>
+      <div class="layer managed"><div class="lname" style="color:var(--ink-3)">Change log</div><div class="ldesc">WAL / logical replication — every INSERT, UPDATE, DELETE</div></div>
+      <div class="layer"><div class="lname">Database</div><div class="ldesc">The source of truth. <b>Your backend just writes here.</b></div></div>
+      <div class="brace-note" style="margin-top:14px">Green = your code · grey = the platform</div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 20:30 — 90 seconds.
+Walk the layers bottom-up: the database commits a change; the change log records it; the realtime service reads the log and filters it; a WebSocket carries it; your subscription receives it; your UI patches its cache.
+The key insight: the interesting event is usually "a row changed", not "our Node process decided to emit". If the database is the source of truth, listen to the database.
+You still own two layers — the green ones. And they're where bugs live (coming up).
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Real-time data</span><span class="sep"></span>Why it matters</div>
+  <h2>Who is responsible for <em>telling the UI?</em></h2>
+  <div class="body">
+    <div class="split top">
+      <div class="card stack" style="--accent:var(--c-ws)">
+        <div class="k">The app pushes</div>
+        <div class="codebox md"><span class="file">orders.service.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+await db.orders.update(id, { status: 'shipped' });
+
+// and now, remember to tell everyone
+io.to(`order:${id}`).emit('order', order);
+</code></pre>
+        </div>
+        <ul class="points sm" style="--accent:var(--c-bad)">
+          <li><span>Every write path must remember to emit — the API, the admin panel, the cron job, the migration script.</span></li>
+          <li><span><b>Forget once</b> and the UI silently lies until someone refreshes.</span></li>
+        </ul>
+      </div>
+      <div class="card accented stack">
+        <div class="k">The database pushes</div>
+        <div class="codebox md"><span class="file">orders.service.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+await db.orders.update(id, { status: 'shipped' });
+
+// that's it — the change feed does the rest
+</code></pre>
+        </div>
+        <ul class="points sm">
+          <li><span><b>Every committed write is an event</b>, no matter who made it — even a manual SQL fix.</span></li>
+          <li><span>The backend stays boring. Realtime becomes a property of the data, not of the code path.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:22px">You'll see both in the live demo. Same dashboard, two modes — and the event log will tell you <b>who</b> sent each update: <code>app pushed</code> or <code>change feed</code>.</div>
+  </div>
+  <aside class="notes">
+⏱ 22:00 — 90 seconds.
+Ask: "Who has had a bug where the UI didn't update because one code path forgot to emit?" Usually several hands.
+That's the whole value proposition in one slide. With CDC, "real-time" becomes a property of the data, not something every developer has to remember.
+The live demo has both modes — "WebSocket" is the left side, "Realtime DB" is the right — and we'll see the difference in the event log.
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Supabase Realtime</span><span class="sep"></span>A concrete example</div>
+  <div class="split r-wide center">
+    <div class="stack lg">
+      <h2>Postgres changes become <em>frontend events.</em></h2>
+      <p class="lead">Supabase runs a realtime server next to your Postgres database. It listens to the replication stream and pushes matching changes to clients over a WebSocket.</p>
+      <div class="kv">
+        <dt>Postgres changes</dt><dd>Row-level INSERT / UPDATE / DELETE events, filtered by schema, table and column.</dd>
+        <dt>Broadcast</dt><dd>Low-latency client-to-client messages that never touch the database — cursors, typing.</dd>
+        <dt>Presence</dt><dd>Who's online in a channel, kept in sync automatically.</dd>
+      </div>
+      <p class="muted small">Row Level Security still applies: clients only receive changes they're allowed to read.</p>
+    </div>
+    <div class="flow">
+      <div class="node n-db"><span class="role">Database</span><b>Postgres</b><small>INSERT · UPDATE · DELETE</small></div>
+      <div class="link v" style="--lc:var(--c-db)"><span class="lbl">write-ahead log</span></div>
+      <div class="node n-db"><span class="role">Realtime service</span><b>Supabase Realtime</b><small>filters · RLS · fan-out</small></div>
+      <div class="link v" style="--lc:var(--c-ws)"><span class="lbl">WebSocket channel</span></div>
+      <div class="node n-ws"><span class="role">Client SDK</span><b>supabase-js</b><small>reconnects · re-joins</small></div>
+      <div class="link v" style="--lc:var(--c-arch)"><span class="lbl">callback</span></div>
+      <div class="node n-ui"><span class="role">Your code</span><b>React UI updates</b><small>patch cache → render</small></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 23:30 — 90 seconds.
+We use Supabase because it's Postgres-shaped and many frontend teams touch it — not as a pitch.
+Postgres changes is the CDC path. Broadcast and Presence are the parts you'd otherwise build on raw WebSockets — cursors and "who's online".
+RLS matters: a subscription is effectively a query someone else runs on your behalf. If your policies are wrong, your realtime feed leaks data.
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Supabase Realtime</span><span class="sep"></span>The code</div>
+  <h2>Subscribe, receive, <em>forget the socket.</em></h2>
+  <div class="body">
+    <div class="split top">
+      <div class="stack">
+        <div class="codebox lg"><span class="file">subscribe.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+const channel = supabase
+  .channel('orders')
+  .on(
+    'postgres_changes',
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'orders'
+    },
+    (payload) => {
+      console.log(payload);
+    }
+  )
+  .subscribe();
+</code></pre>
+        </div>
+        <p class="muted">No connection URL, no reconnect loop, no message protocol. The SDK owns all of it.</p>
+      </div>
+      <div class="stack">
+        <div class="codebox"><span class="file">payload</span>
+<pre><code class="language-json" data-trim data-noescape>
+{
+  "schema": "public",
+  "table": "orders",
+  "eventType": "UPDATE",
+  "commit_timestamp": "2026-09-28T14:02:11Z",
+  "old": { "id": 1023 },
+  "new": {
+    "id": 1023,
+    "status": "preparing",
+    "payment": "paid"
+  }
+}
+</code></pre>
+        </div>
+        <div class="callout">The payload is <b>a row</b>, not a business event. Your UI now depends on your table's shape — <b>the schema has become an API.</b></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 25:00 — 75 seconds.
+Walk the payload: eventType, the new row, the old row (only the primary key unless the table uses REPLICA IDENTITY FULL), and the commit timestamp.
+The callout is the senior insight: renaming a column is now a breaking change for the frontend. Your database schema just became a public contract.
+Transition: getting events is the easy part. Keeping the UI correct is the frontend's job.
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Real-time data</span><span class="sep"></span>The frontend's job</div>
+  <h2>The SDK owns the pipe. <em>You still own correctness.</em></h2>
+  <div class="body">
+    <div class="split r-wide top">
+      <div class="codebox"><span class="file">useLiveOrders.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+useEffect(() => {
+  const channel = supabase
+    .channel('orders')
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'orders' },
+      ({ eventType, new: row, old }) =>
+        queryClient.setQueryData(['orders'], (list = []) =>
+          eventType === 'DELETE'
+            ? list.filter((o) => o.id !== old.id)
+            : upsert(list, row)
+        )
+    )
+    .subscribe((status) => {
+      // first join AND every reconnect: resync the snapshot
+      if (status === 'SUBSCRIBED') {
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+      }
+    });
+
+  return () => { supabase.removeChannel(channel); };
+}, []);
+</code></pre>
+      </div>
+      <ol class="points num" style="gap:18px">
+        <li><span><b>Subscribe narrowly.</b> Filter by table, event and row. Too wide and you drown; too narrow and the UI lies.</span></li>
+        <li><span><b>Patch the cache, don't replace the UI.</b> The event is a delta; React Query or your store is the truth the UI reads.</span></li>
+        <li><span><b>Resync on every (re)subscribe.</b> Events that happened while you were offline are gone. Refetch the snapshot.</span></li>
+        <li><span><b>Unsubscribe on unmount.</b> Leaked channels are leaked memory, leaked money, and sometimes leaked data.</span></li>
+        <li><span><b>Order and duplicates are your problem.</b> Compare versions or timestamps before applying an event.</span></li>
+      </ol>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 26:30 — 2 minutes. This is the most practical slide in the chapter.
+The race: if you fetch first and subscribe second, any change in between is lost. If you subscribe first and fetch second, you can get an event older than your snapshot. The pattern here — invalidate on SUBSCRIBED — covers the first join and every reconnect.
+Optimistic updates plus realtime is a classic race: your optimistic write, then the server echo, then an older event. Decide on a rule (version wins).
+Ask: "Where does your source of truth live after an event arrives — the payload, or a refetch?"
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Real-time data</span><span class="sep"></span>Trade-offs</div>
+  <h2>What you gain, and <em>what you give up.</em></h2>
+  <div class="body">
+    <div class="proscons roomy-list" style="gap:28px">
+      <div class="card pro">
+        <h4>You gain</h4>
+        <ul>
+          <li><b>No connection infrastructure</b> — no socket servers, sticky sessions or heartbeat code.</li>
+          <li><b>Every write is an event</b>, from every code path, automatically.</li>
+          <li><b>Access rules at the data layer</b> — the same policies protect queries and subscriptions.</li>
+          <li><b>Speed</b> — a live feature in an afternoon instead of a sprint.</li>
+        </ul>
+      </div>
+      <div class="card con">
+        <h4>You give up</h4>
+        <ul>
+          <li><b>Your schema becomes the API.</b> The UI couples to tables and columns.</li>
+          <li><b>Row events, not business events.</b> “Status changed” isn't “order shipped, notify the customer”.</li>
+          <li><b>Event storms</b> — a bulk update of 50,000 rows is 50,000 events.</li>
+          <li><b>Lock-in</b> and less control over batching, payload shape and delivery guarantees.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="statement push-bottom" style="font-size:46px;max-width:none">Rule of thumb: realtime DBs are great at <em>“keep this list in sync”</em> — business reactions belong in your backend.</p>
+  </div>
+  <aside class="notes">
+⏱ 28:30 — 90 seconds.
+This is where seniors earn their title: every row on the right is a production story.
+Event storms: a migration that updates every order will light up every connected client. Pause realtime or filter during bulk operations.
+Row events vs business events: great for "keep this list in sync", weaker for "do something meaningful when X happens". Business events belong in your backend — which is where webhooks come in.
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="2">
+  <div class="eyebrow"><span class="chip">Real-time data</span><span class="sep"></span>The family</div>
+  <h2>Same idea, <em>different shapes.</em></h2>
+  <div class="body">
+    <div class="grid-4">
+      <div class="card stack sm"><div class="k">Firebase RTDB</div><h3>A JSON tree that syncs</h3><p>Listen to a path, get the value — and every change to it.</p><pre class="snip"><code class="language-js">onValue(
+  ref(db, 'orders/1023'),
+  cb
+)</code></pre></div>
+      <div class="card stack sm"><div class="k">Firestore</div><h3>Documents &amp; queries you listen to</h3><p>Snapshot listeners on a document or a whole query.</p><pre class="snip"><code class="language-js">onSnapshot(
+  query(ordersRef),
+  cb
+)</code></pre></div>
+      <div class="card stack sm"><div class="k">Convex</div><h3>Queries that re-run</h3><p>When data a query read changes, the result is pushed again.</p><pre class="snip"><code class="language-js">useQuery(
+  api.orders.list
+)</code></pre></div>
+      <div class="card stack sm"><div class="k">Supabase</div><h3>Postgres rows as events</h3><p>Change data capture from the write-ahead log.</p><pre class="snip"><code class="language-js">.on(
+  'postgres_changes',
+  filter, cb
+)</code></pre></div>
+    </div>
+    <p class="statement push-bottom" style="font-size:52px;max-width:none">Real-time database services are <em>abstractions over the infrastructure</em> we just built by hand.</p>
+  </div>
+  <aside class="notes">
+⏱ 30:00 — 60 seconds, then you have ~1 minute of buffer before chapter 3.
+Don't compare vendors or pricing. One breath each on the mental model.
+The statement at the bottom is the lesson of the chapter. Under every one of these APIs: WebSockets, reconnection, heartbeats. Someone else's problem — not no one's problem.
+In the demo, the "Realtime DB" SDK is about 80 lines on top of a WebSocket. I'll show it.
+Transition: we have server → browser and database → browser. But what about events that start outside our system?
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 3 · WEBHOOKS (32–42)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-hook opener" data-chapter="3">
+  <div class="num">03</div>
+  <h2>Webhooks &amp;<br>External Events</h2>
+  <p class="lead">So far, our server has been talking to our frontend. But the payment happened at Stripe. The PR was opened on GitHub. <b>How does another system tell our backend that something happened?</b></p>
+  <aside class="notes">
+⏱ 32:00 — 20 seconds.
+Frontend engineers often skip this layer — and then wonder why the checkout page is polling.
+This chapter stays conceptual. No crypto deep dive.
+  </aside>
+</section>
+
+<section class="t-hook" data-chapter="3">
+  <div class="eyebrow"><span class="chip">Webhooks</span><span class="sep"></span>“Don't call us, we'll call you”</div>
+  <h2>Stop asking Stripe. <em>Let Stripe call you.</em></h2>
+  <div class="body">
+    <div class="split top">
+      <div class="card flat stack">
+        <div class="k" style="color:var(--c-poll)">Without webhooks · you poll them</div>
+        <div class="flow h" style="gap:0;margin:10px 0 6px">
+          <div class="node sm n-ws"><b>Your backend</b></div>
+          <div class="link h" style="--lc:var(--c-poll)"><span class="lbl">GET /payment_intents/pi_… every 3 s</span></div>
+          <div class="node sm n-hook"><b>Stripe</b></div>
+        </div>
+        <p>For every pending payment, for every user, until it resolves. It's polling again — across the internet, against someone else's rate limits.</p>
+      </div>
+      <div class="card accented stack">
+        <div class="k">With webhooks · they call you</div>
+        <div class="flow h" style="gap:0;margin:10px 0 6px">
+          <div class="node sm n-hook"><b>Stripe</b></div>
+          <div class="link h" style="--lc:var(--c-hook)"><span class="lbl">POST /webhooks/stripe</span></div>
+          <div class="node sm n-ws"><b>Your backend</b></div>
+        </div>
+        <p>You register a URL once. When something happens on their side, they send an HTTP POST to it. <b>A webhook is an HTTP callback</b> — for once, you are the server.</p>
+      </div>
+    </div>
+    <div class="grid-4" style="margin-top:22px">
+      <div class="card tight stack sm"><div class="k">Stripe</div><code>payment_intent.succeeded</code><p class="small muted">The card cleared. Mark the order paid, start fulfilment.</p></div>
+      <div class="card tight stack sm"><div class="k">GitHub</div><code>pull_request.opened</code><p class="small muted">Kick off CI, post a preview link, ping reviewers.</p></div>
+      <div class="card tight stack sm"><div class="k">Shopify</div><code>orders/create</code><p class="small muted">A sale on the storefront. Sync stock, notify the warehouse.</p></div>
+      <div class="card tight stack sm"><div class="k">Twilio</div><code>MessageStatus=delivered</code><p class="small muted">The SMS reached the phone. Update the conversation UI.</p></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 32:30 — 90 seconds.
+Draw the connection to chapter 1: the left side is polling — the same pain, just between servers instead of browser and server.
+The flip: our backend becomes the server, Stripe becomes the client. That inversion is the whole idea.
+Trust boundary: the URL is public. Anyone can POST to it. Keep that in mind — it's the next slide.
+  </aside>
+</section>
+
+<section class="t-hook" data-chapter="3">
+  <div class="eyebrow"><span class="chip">Webhooks</span><span class="sep"></span>Anatomy of a delivery</div>
+  <h2>It's just an HTTP POST. <em>Treat it like a stranger.</em></h2>
+  <div class="body">
+    <div class="split l-wide top">
+      <div class="codebox"><span class="file">what arrives at your endpoint</span>
+<pre class="wire-text"><code class="nohighlight" data-trim data-noescape>
+<span class="h">POST</span> /webhooks/stripe <span class="h">HTTP/1.1</span>
+<span class="h">Host:</span> api.yourapp.com
+<span class="h">Content-Type:</span> application/json
+<span class="h">Stripe-Signature:</span> <span class="x">t=1790604131,v1=5257a869e7ec…</span>
+
+{
+  <span class="v">"id"</span>: <span class="x">"evt_1QxK2mL8"</span>,
+  <span class="v">"type"</span>: <span class="x">"payment_intent.succeeded"</span>,
+  <span class="v">"created"</span>: 1790604131,
+  <span class="v">"data"</span>: {
+    <span class="v">"object"</span>: {
+      <span class="v">"id"</span>: "pi_3QxK",
+      <span class="v">"amount"</span>: 2490,
+      <span class="v">"metadata"</span>: { <span class="v">"order_id"</span>: "1023" }
+    }
+  }
+}
+</code></pre>
+      </div>
+      <div class="kv" style="grid-template-columns:150px 1fr;gap:20px 20px">
+        <dt>Endpoint</dt><dd>A public URL you register with the provider. Anyone on the internet can POST to it.</dd>
+        <dt>Signature</dt><dd>An HMAC of the timestamp + <b>raw body</b>, using a secret only you and Stripe know. The timestamp blocks replays.</dd>
+        <dt>Event id</dt><dd>Your <b>idempotency key</b>. You will see the same id more than once.</dd>
+        <dt>Type</dt><dd>Route on it. Ignore types you don't handle — but still return 2xx.</dd>
+        <dt>Payload</dt><dd>Untrusted until verified. May be stale by the time you process it.</dd>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 34:00 — 90 seconds.
+"Raw body" matters: if your framework parses JSON before you verify, re-serialising changes the bytes and the signature fails. Classic Express bug.
+The metadata.order_id is how you connect their event to your data. Set it when you create the payment.
+In the demo there's a "forge webhook" button: it sends a payment event with a fake signature and you'll see it rejected.
+  </aside>
+</section>
+
+<section class="t-hook" data-chapter="3">
+  <div class="eyebrow"><span class="chip">Webhooks</span><span class="sep"></span>Delivery is at-least-once</div>
+  <div class="split r-wide">
+    <div class="stack lg">
+      <h2>The same event <em>will</em> arrive twice.</h2>
+      <p class="lead">Webhook providers guarantee <b>at-least-once</b> delivery, not exactly-once. Design for it from day one.</p>
+      <ul class="points sm">
+        <li><span><b>Your endpoint was down or slow</b> → they retry with backoff. Stripe keeps trying for up to three days.</span></li>
+        <li><span><b>Your 200 got lost on the way back</b> → they think it failed and send it again.</span></li>
+        <li><span><b>Events can arrive out of order.</b> “Updated” can land before “created”.</span></li>
+      </ul>
+      <div class="callout">Watch the simulation: a failed delivery, a retry, and then a duplicate — <b>processed exactly once</b> because we remember event ids.</div>
+    </div>
+    <div class="sim" data-sim="webhook"></div>
+  </div>
+  <aside class="notes">
+⏱ 35:30 — 2 minutes. Let the simulation run a full cycle.
+Narrate: first attempt hits a 500 (deploy in progress), Stripe backs off and retries, gets a 200 — then a duplicate arrives and is ignored because we've seen the event id.
+Frontend implication: duplicates flow downstream. UI handlers must be idempotent too — set status to paid, don't increment a counter per event, don't show a toast per event.
+Ask: "What happens in your system if the same payment event is processed twice?" If the answer is "we ship two pizzas", that's a bug waiting.
+  </aside>
+</section>
+
+<section class="t-hook" data-chapter="3">
+  <div class="eyebrow"><span class="chip">Webhooks</span><span class="sep"></span>The rules</div>
+  <h2>Five rules for <em>every</em> webhook endpoint.</h2>
+  <div class="body">
+    <div class="split l-wide top">
+      <div class="codebox"><span class="file">webhooks.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+app.post('/webhooks/stripe',
+  express.raw({ type: 'application/json' }), // raw bytes!
+  async (req, res) => {
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body, req.headers['stripe-signature'], secret
+      );
+    } catch {
+      return res.sendStatus(400);        // 1. verify
+    }
+
+    if (await alreadyProcessed(event.id)) {
+      return res.sendStatus(200);        // 2. idempotent
+    }
+
+    await queue.add(event);              // 3. work async
+    res.sendStatus(200);                 // 4. ack fast
+  });
+</code></pre>
+      </div>
+      <ol class="points num" style="gap:22px">
+        <li><span><b>Verify the signature</b> on the raw body before trusting a single byte.</span></li>
+        <li><span><b>Be idempotent.</b> Store processed event ids — a unique constraint is enough.</span></li>
+        <li><span><b>Do the work asynchronously.</b> Emails, fulfilment and third-party calls go to a queue.</span></li>
+        <li><span><b>Acknowledge fast.</b> A 2xx means “I've safely stored this”, not “I've finished”. Slow responses trigger retries.</span></li>
+        <li><span><b>Don't trust order.</b> Compare timestamps or re-fetch the object if you need the current state.</span></li>
+      </ol>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 37:30 — 90 seconds.
+Two stories if there's time: (1) processing inside the request, timing out, Stripe retries, you fulfil twice. (2) no idempotency: double emails, double stock decrements.
+Rule 5 is subtle: if you get "payment_intent.succeeded" then a late "payment_intent.processing", don't downgrade the order. Or re-fetch the PaymentIntent and trust its current status.
+Don't live-code HMAC. If asked: HMAC-SHA256 of "timestamp.rawBody", constant-time comparison, reject old timestamps.
+  </aside>
+</section>
+
+<section class="t-hook" data-chapter="3">
+  <div class="eyebrow"><span class="chip">Event-driven</span><span class="sep"></span>The hinge</div>
+  <div class="split r-wide center">
+    <div class="stack lg">
+      <h2>A webhook is the <em>entrance</em> — not the exit.</h2>
+      <p class="lead">Webhooks bring external events <b>into your backend</b>. Getting them to a user's screen is a different problem — the one we already solved.</p>
+      <div class="callout"><b>Browsers can't receive webhooks.</b> They have no public address to POST to. The frontend never talks to Stripe's webhook — it talks to <i>you</i>, after you've verified and stored the fact.</div>
+      <p class="muted">Persist first, notify second. The notification can be a database change event or an explicit push after the commit.</p>
+    </div>
+    <div class="flow">
+      <div class="node n-hook"><span class="role">External service</span><b>Stripe · GitHub · Shopify</b></div>
+      <div class="link v" style="--lc:var(--c-hook)"><span class="lbl">webhook · HTTP POST</span></div>
+      <div class="node n-ws"><span class="role">Your backend</span><b>verify → dedupe → persist</b></div>
+      <div class="link v" style="--lc:var(--c-db)"><span class="lbl">write</span></div>
+      <div class="node n-db"><span class="role">Database</span><b>order.payment = paid</b></div>
+      <div class="link v" style="--lc:var(--c-sse)"><span class="lbl">change event / push</span></div>
+      <div class="node n-ui"><span class="role">Frontend</span><b>“Payment successful”</b></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 39:30 — 60 seconds, then you have buffer to 42:00 for questions or a breather.
+"Browsers can't receive webhooks" is a surprisingly common misunderstanding with juniors — say it clearly.
+This diagram connects chapter 3 back to chapters 1 and 2: webhook in, database in the middle, real-time transport out.
+Transition: "Let's put all three on one slide."
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 4 · ARCHITECTURE (42–47)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-arch" data-chapter="4">
+  <div class="eyebrow"><span class="chip">End-to-end architecture</span></div>
+  <h2>Events enter. State is stored. <em>UIs subscribe.</em></h2>
+  <div class="body" style="margin-top:18px">
+    <div class="arch" data-arch>
+      <svg data-arch-svg></svg>
+      <div class="node n-hook" data-n="stripe" style="left:12%;top:18%"><span class="role">External</span><b>Stripe</b><small>payment succeeded</small></div>
+      <div class="node n-ui" data-n="user" style="left:12%;top:78%"><span class="role">User</span><b>Browser</b><small>clicks “Pay”</small></div>
+      <div class="node n-ws" data-n="backend" style="left:40%;top:48%"><span class="role">Backend</span><b>API</b><small>verify · dedupe · write</small></div>
+      <div class="node n-db" data-n="db" style="left:64%;top:18%"><span class="role">Data</span><b>Database</b><small>source of truth</small></div>
+      <div class="node n-db" data-n="rt" style="left:88%;top:18%"><span class="role">Realtime layer</span><b>Change feed</b><small>CDC → WebSocket</small></div>
+      <div class="node n-sse" data-n="push" style="left:64%;top:78%"><span class="role">Transport</span><b>WebSocket / SSE</b><small>app-level push</small></div>
+      <div class="node n-ui" data-n="ui" style="left:88%;top:62%"><span class="role">Frontend</span><b>React UI</b><small>patch cache → render</small></div>
+    </div>
+    <div class="legend">
+      <span style="--lc:var(--c-hook)">external events (chapter 3)</span>
+      <span style="--lc:var(--c-db)">real-time data (chapter 2)</span>
+      <span style="--lc:var(--c-sse)">communication (chapter 1)</span>
+      <span style="--lc:var(--c-http)">plain HTTP</span>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 42:00 — 90 seconds. This is the centerpiece. Slow down.
+Trace the moving dot with your hand: Stripe → webhook → backend → database → change feed → UI. Then the alternative path: backend → WebSocket/SSE → UI.
+Both paths are valid. What's not valid: writing to the socket and the database separately with no single source of truth — that's how you get split-brain UIs.
+Recommendation: persist first, notify second. If they remember one diagram from today, it should be this one.
+  </aside>
+</section>
+
+<section class="t-arch" data-chapter="4" data-payment>
+  <div class="eyebrow"><span class="chip">Payment flow</span><span class="sep"></span>Step by step</div>
+  <h2>“Pending” → “Paid” — <em>without a refresh.</em></h2>
+  <div class="body" style="margin-top:22px">
+    <div class="split r-wider center" style="grid-template-columns:1.25fr 0.75fr">
+      <div class="steps">
+        <div class="step always" style="--sc:var(--c-http)"><div class="rail"><b>1</b><i></i></div><div class="txt"><b>User pays</b><span>Checkout redirects back to “Order #1023 — payment pending”.</span></div></div>
+        <div class="step fragment" style="--sc:var(--c-hook)"><div class="rail"><b>2</b><i></i></div><div class="txt"><b>Stripe processes the payment</b><span>Card checks, 3-D Secure, fraud rules. <em>Can take seconds — or fail.</em></span></div></div>
+        <div class="step fragment" style="--sc:var(--c-hook)"><div class="rail"><b>3</b><i></i></div><div class="txt"><b>Stripe sends a webhook</b><span><code>payment_intent.succeeded</code> → <code>POST /webhooks/stripe</code>. <em>May arrive twice.</em></span></div></div>
+        <div class="step fragment" style="--sc:var(--c-ws)"><div class="rail"><b>4</b><i></i></div><div class="txt"><b>Backend verifies and updates the order</b><span>Signature ✓ · event id not seen ✓ · <code>UPDATE orders SET payment = 'paid'</code></span></div></div>
+        <div class="step fragment" style="--sc:var(--c-db)"><div class="rail"><b>5</b><i></i></div><div class="txt"><b>The database change becomes an event</b><span>Change feed emits <code>UPDATE public.orders #1023</code>.</span></div></div>
+        <div class="step fragment" style="--sc:var(--c-sse)"><div class="rail"><b>6</b><i></i></div><div class="txt"><b>The frontend receives it</b><span>Over the open WebSocket or SSE stream. <em>If the tab slept, resync on wake.</em></span></div></div>
+        <div class="step fragment" data-effect="paid" style="--sc:var(--c-db)"><div class="rail"><b>7</b><i></i></div><div class="txt"><b>The UI flips to “Payment successful”</b><span>Nobody pressed refresh. That's the question from minute one.</span></div></div>
+      </div>
+      <div class="phone" data-phone>
+        <div class="screen">
+          <div class="app-title">yourapp.com · checkout</div>
+          <div class="order-h">Order #1023</div>
+          <div class="line"><span>2× Margherita</span><span>€24.90</span></div>
+          <div class="line"><span>Delivery</span><span>Free</span></div>
+          <p class="note">Keep this page open — it updates the moment your bank confirms. No refresh needed.</p>
+          <div class="status-box">
+            <div class="s-l">Payment</div>
+            <div class="s-v" data-phone-status>Pending</div>
+            <div class="spinner"></div>
+            <div class="check">✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 43:30 — 2 minutes. Click slowly. Each step lights up.
+Step 3: "the browser isn't in this conversation at all yet."
+Step 5: "the database is the source of truth — the socket is only a messenger."
+Step 7: the phone flips green. Callback to the opening question: nobody refreshed.
+Failure modes in one sentence each: webhook delayed → keep a timeout plus a manual "check status" path; user closed the tab → email is the fallback UX.
+  </aside>
+</section>
+
+<section class="t-arch" data-chapter="4">
+  <div class="eyebrow"><span class="chip">Failure modes</span><span class="sep"></span>Where it breaks</div>
+  <h2>Every arrow on that diagram <em>can fail.</em></h2>
+  <div class="body">
+    <table class="table">
+      <thead><tr><th>What breaks</th><th>What the user sees</th><th>What you do</th></tr></thead>
+      <tbody>
+        <tr><td>Webhook is delayed</td><td>A spinner that never ends</td><td>Time out into “we'll email you”, offer “check status” — that re-fetches from the provider</td></tr>
+        <tr><td>Duplicate event</td><td>Two toasts, two emails, two pizzas</td><td>Idempotency keys on the backend; <b>set</b> state in the UI, never increment</td></tr>
+        <tr><td>Socket drops</td><td>A UI that silently stops updating</td><td>Heartbeats, backoff + jitter, show “reconnecting”, <b>resync the snapshot</b> on reconnect</td></tr>
+        <tr><td>Events out of order</td><td>“Paid” flips back to “Pending”</td><td>Version or timestamp on every row; ignore anything older than what you have</td></tr>
+        <tr><td>Tab was asleep</td><td>Wakes up showing hour-old data</td><td>Refetch on <code>visibilitychange</code> / focus — React Query does this by default</td></tr>
+      </tbody>
+    </table>
+    <div class="callout push-bottom">Design <b>three states</b> for every live screen, not one: <b>live</b>, <b>reconnecting</b>, and <b>stale</b>. Most real-time bugs are a UI that only designed the first.</div>
+  </div>
+  <aside class="notes">
+⏱ 45:30 — 90 seconds.
+This is the "real-time systems require careful handling of reconnection, ordering, duplication, authentication, and state synchronization" takeaway, made concrete.
+Pick two rows and tell a story. "Paid flips back to pending" is the one people remember.
+Transition: "Enough slides. Let's run it."
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 5 · LIVE DEMO (47–55)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-db" data-chapter="5">
+  <div class="eyebrow"><span class="chip">Live demo</span><span class="sep"></span>47–55 min</div>
+  <h2>One dashboard. <em>Three acts.</em></h2>
+  <div class="body">
+    <div class="acts" style="flex:1">
+      <div class="card"><div class="act">Act I</div><h3>Same UI, five transports</h3><p>The orders look identical in every mode. What changes is the traffic underneath.</p>
+        <ol class="clicks"><li>Polling, with the kitchen running</li><li>Long polling → far fewer requests</li><li>SSE and WebSocket → one connection</li><li>Realtime DB → the change feed talks</li></ol>
+        <div class="watch">Watch: <b>HTTP requests</b> vs <b>messages</b>, and the <b>latency</b> column.</div></div>
+      <div class="card"><div class="act">Act II</div><h3>Someone in the room pays</h3><p>Your phones get a “Pay” button. The first tap goes to a fake Stripe, which sends a signed webhook.</p>
+        <ol class="clicks"><li>Everyone gets a Pay button</li><li>First tap wins, the rest see “too slow”</li><li>Stripe delivers the webhook — twice</li><li>I forge one. It gets rejected.</li></ol>
+        <div class="watch">Watch: <b>signature</b>, <b>duplicate delivery</b>, then the row flips to paid.</div></div>
+      <div class="card"><div class="act">Act III</div><h3>I break the network</h3><p>One button drops every live connection on the server. The clients have to notice and heal.</p>
+        <ol class="clicks"><li>Drop every connection</li><li>Clients show “reconnecting…”</li><li>Backoff, then reconnect</li><li>Fresh snapshot — nothing lost</li></ol>
+        <div class="watch">Watch: <b>reconnecting…</b>, backoff, then a fresh snapshot.</div></div>
+    </div>
+    <p class="lead" style="margin-top:22px">Everything you'll see is real: a Node server, real <code>EventSource</code>, real WebSockets, a real HMAC-signed webhook. Only Stripe is simulated.</p>
+  </div>
+  <aside class="notes">
+⏱ 47:00 — 45 seconds. Set expectations so the audience knows what to watch.
+Tell phones: "Don't tap anything yet — you'll know when."
+Rehearsal tip: open /dashboard in a separate tab beforehand so the server is warm, and press Reset before the talk.
+  </aside>
+</section>
+
+<section class="t-db" data-chapter="5" data-stage="lobby" style="padding:40px 56px 70px">
+  <div class="row" style="justify-content:space-between;margin-bottom:16px">
+    <div class="eyebrow" style="margin:0"><span class="chip">Live</span><span class="sep"></span>Real-time order dashboard</div>
+    <div class="row">
+      <span class="pill c dot fragment fade-in-then-out" data-stage="pay" style="--pc:var(--c-hook)">Phones: “Pay” is live</span>
+      <span class="pill c dot fragment" data-stage="lobby" style="--pc:var(--c-db)">Phones: back to reactions</span>
+    </div>
+  </div>
+  <div class="demo-frame">
+    <iframe data-demo data-src="/dashboard/?embed=1" title="Live order dashboard"></iframe>
+  </div>
+  <aside class="notes">
+⏱ 48:00 — 7 minutes. Stop at 55:00 no matter what.
+ACT I (3 min): Start on Polling — the Kitchen is already running, one order change every 10 s. Point at HTTP requests climbing and 304s. Switch to Long polling — fewer requests, lower latency. SSE — requests drop to 1, latency near zero. WebSocket — same, but note the event log: "app pushed". Realtime DB — the log now says "change feed", and the backend code never called broadcast.
+ACT II (2 min): Turn the kitchen off so the log is readable. Press → (next fragment) to put "Pay" on everyone's phone. First tap wins. Narrate the log: stripe → webhook → signature verified → UPDATE → change feed → UI. Then the duplicate delivery 2 seconds later: "duplicate → no side effects". Everyone else's phone says someone was faster — that's idempotency from the user's side. Then click "Forge webhook": rejected, signature mismatch.
+ACT III (1.5 min): Click "Drop connections". Status goes to reconnecting, then back. Point out the snapshot refetch in the log. With polling mode, nothing to drop — polling is naturally resilient.
+Press → again to put phones back to reactions.
+Backup if the network dies: the dashboard runs entirely on this laptop. Use the "Pay #1023" button instead of phones.
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTER 6 · CHOOSE (55–60)
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-ws" data-chapter="6" data-stage="lobby">
+  <div class="eyebrow"><span class="chip">Choosing</span><span class="sep"></span>Ask these, in this order</div>
+  <h2>Choose the problem first. <em>Then the tool.</em></h2>
+  <div class="body">
+    <div class="tree">
+      <div class="q" style="--qc:var(--c-poll)"><div class="qq"><small>Question 1</small>Is a few seconds of staleness fine?<p>e.g. <i>order history, admin tables, analytics, “last updated 30 s ago”</i></p></div><div class="qa"><div class="yes">Yes →</div><b>Polling</b><span>or refetch on focus. Stop here.</span></div></div>
+      <div class="q" style="--qc:var(--c-hook)"><div class="qq"><small>Question 2</small>Does the change start in someone else's system?<p>e.g. <i>a payment at Stripe, a PR on GitHub, a Shopify sale</i></p></div><div class="qa"><div class="yes">Yes →</div><b>Webhook in</b><span>…then keep asking how it reaches the UI.</span></div></div>
+      <div class="q" style="--qc:var(--c-db)"><div class="qq"><small>Question 3</small>Is the change just “a row in our database changed”?<p>e.g. <i>a status column, a new comment, a shared todo list</i></p></div><div class="qa"><div class="yes">Yes →</div><b>Realtime DB</b><span>if your platform has one.</span></div></div>
+      <div class="q" style="--qc:var(--c-sse)"><div class="qq"><small>Question 4</small>Does only the server need to push?<p>e.g. <i>notifications, delivery tracking, AI answers, job progress</i></p></div><div class="qa"><div class="yes">Yes →</div><b>SSE</b><span>or HTTP streaming for a single response.</span></div></div>
+      <div class="q" style="--qc:var(--c-ws)"><div class="qq"><small>Question 5</small>Do both sides send often, with low latency?<p>e.g. <i>chat with typing, cursors, multiplayer, trading</i></p></div><div class="qa"><div class="yes">Yes →</div><b>WebSocket</b><span>and budget for everything around it.</span></div></div>
+    </div>
+    <div class="callout push-bottom">Notice where WebSockets are: <b>last.</b> Not because they're bad — because they're the most expensive answer, and you should arrive there on purpose.</div>
+  </div>
+  <aside class="notes">
+⏱ 55:00 — 60 seconds.
+Walk left to right. Most features stop at question 1 or 4.
+"WebSockets last" is the line to land. They're the most powerful and most expensive option.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="6">
+  <div class="eyebrow"><span class="chip">Choosing</span><span class="sep"></span>The cheat sheet</div>
+  <h2>Requirement → <em>approach.</em></h2>
+  <div class="body">
+    <table class="table" style="font-size:23px">
+      <thead><tr><th>Requirement</th><th>Approach</th><th>Because</th></tr></thead>
+      <tbody>
+        <tr><td>Simple periodic updates</td><td class="tc" style="--tc:var(--c-poll)">Polling</td><td>Stateless, cacheable, works everywhere. Latency = interval.</td></tr>
+        <tr><td>Server → client events</td><td class="tc" style="--tc:var(--c-sse)">SSE</td><td>Plain HTTP, auto-reconnect, resumable with Last-Event-ID.</td></tr>
+        <tr><td>Client ↔ server communication</td><td class="tc" style="--tc:var(--c-ws)">WebSocket</td><td>Low-latency, both directions — you own the protocol and the lifecycle.</td></tr>
+        <tr><td>Database changes → UI</td><td class="tc" style="--tc:var(--c-db)">Realtime database</td><td>Every write becomes an event; the platform owns the pipe.</td></tr>
+        <tr><td>External system → backend</td><td class="tc" style="--tc:var(--c-hook)">Webhook</td><td>The provider calls you. Verify, dedupe, ack fast.</td></tr>
+        <tr><td>Streaming HTTP response</td><td class="tc" style="--tc:var(--c-sse)">HTTP streaming</td><td>One request, a long answer — AI tokens, big exports.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout push-bottom">They combine. <b>Webhook in → database → SSE out</b> is a complete, boring, excellent stack — and boring is what you want at 3 a.m.</div>
+  </div>
+  <aside class="notes">
+⏱ 56:00 — 45 seconds. Let them photograph it. Read two rows at most.
+Remind: you can combine. Webhook + database + SSE is a complete, boring, excellent stack.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="6">
+  <div class="eyebrow"><span class="chip">Before you start</span></div>
+  <div class="split center">
+    <div class="stack lg">
+      <p class="statement" style="font-size:88px">Do I actually need <em>real-time?</em></p>
+      <p class="lead">“Live” in a product spec is not a reason to hold open a connection per tab. If a refresh or a 30-second poll is honest enough — ship that.</p>
+    </div>
+    <div class="stack">
+      <div class="card flat"><div class="k" style="color:var(--c-bad)">What real-time costs you</div>
+        <p>Reconnection · re-authentication · ordering · duplicates · resync · fan-out · stateful servers · a UI that must survive being wrong for a second.</p></div>
+      <div class="card flat"><div class="k" style="color:var(--c-db)">Good defaults that aren't “real-time”</div>
+        <p>Refetch on window focus · invalidate after mutations · poll only while a screen is visible · a “new items” banner instead of live-shifting lists.</p></div>
+      <div class="card accented"><div class="k">Where it earns its cost</div>
+        <p>A human is staring at the screen, waiting: checkout, chat, delivery, collaboration.</p></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 56:45 — 45 seconds. Be the adult in the room.
+Order history page: refetch on focus is enough. The checkout spinner the user is staring at: that's where real-time pays off.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="6">
+  <div class="eyebrow"><span class="chip">Takeaways</span></div>
+  <h2>Real-time web is <em>an ecosystem.</em></h2>
+  <div class="body">
+    <div class="equation">
+      <div class="card" style="--accent:var(--c-sse)"><div class="k">Communication</div><h3>How it travels</h3><p>Polling, long polling, SSE, WebSockets.</p></div>
+      <div class="op">+</div>
+      <div class="card" style="--accent:var(--c-db)"><div class="k">Real-time data</div><h3>What changed</h3><p>Databases that turn writes into events.</p></div>
+      <div class="op">+</div>
+      <div class="card" style="--accent:var(--c-hook)"><div class="k">External events</div><h3>Where it started</h3><p>Webhooks from the systems around you.</p></div>
+    </div>
+    <div class="card flat" style="margin-top:34px;padding:34px 30px 30px">
+      <div class="k" style="color:var(--ink-3);margin-bottom:34px">One payment, all three layers</div>
+      <div class="pipeline">
+        <div class="node n-hook"><span class="role">Where</span><b>Stripe</b></div>
+        <div class="link h" style="--lc:var(--c-hook)"><span class="lbl">webhook</span></div>
+        <div class="node n-ws"><span class="role">Verify</span><b>Backend</b></div>
+        <div class="link h" style="--lc:var(--c-db)"><span class="lbl">write</span></div>
+        <div class="node n-db"><span class="role">What</span><b>Database</b></div>
+        <div class="link h" style="--lc:var(--c-db)"><span class="lbl">change feed</span></div>
+        <div class="node n-db"><span class="role">Fan-out</span><b>Realtime</b></div>
+        <div class="link h" style="--lc:var(--c-sse)"><span class="lbl">WS / SSE</span></div>
+        <div class="node n-ui"><span class="role">How</span><b>React UI</b></div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:30px;max-width:none">Most “real-time bugs” are a problem in one layer being solved in another. <b>Name the layer first.</b></p>
+  </div>
+  <aside class="notes">
+⏱ 57:30 — 20 seconds. Quick recap, straight into the takeaways.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="6">
+  <div class="eyebrow"><span class="chip">Takeaways</span></div>
+  <h2>Six things to <em>take back to your team.</em></h2>
+  <div class="body">
+    <div class="takeaways">
+      <div class="card"><div class="n">01</div><h3>Real-time is a requirement, not a technology.</h3><p>Start from freshness, direction, and where the change begins.</p></div>
+      <div class="card"><div class="n">02</div><h3>WebSockets aren't the answer to every real-time problem.</h3><p>They're the most powerful option, and the most expensive.</p></div>
+      <div class="card"><div class="n">03</div><h3>SSE is excellent for server → client updates.</h3><p>Your phones used it for an hour without anyone noticing.</p></div>
+      <div class="card"><div class="n">04</div><h3>Real-time databases are a higher-level abstraction.</h3><p>Every write becomes an event — and your schema becomes an API.</p></div>
+      <div class="card"><div class="n">05</div><h3>Webhooks connect external systems to your backend.</h3><p>Not to your React tree. Verify, dedupe, ack fast.</p></div>
+      <div class="card"><div class="n">06</div><h3>The hard parts are the same everywhere.</h3><p>Reconnection, ordering, duplication, authentication, state sync.</p></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 57:50 — 50 seconds. Read 01, 02 and 06 out loud. The others they can photograph.
+Straight into the final question.
+  </aside>
+</section>
+
+<section class="t-ws" data-chapter="6" data-stage="poll:closing">
+  <div class="split center">
+    <div class="stack lg">
+      <div class="eyebrow" style="margin:0"><span class="chip">One last question</span></div>
+      <p class="statement" style="font-size:78px">What communication problem are you <em>actually</em> trying to solve?</p>
+    </div>
+    <div class="stack">
+      <p class="poll-meta live-only">On your phone: what will you reach for first next time?</p>
+      <div class="poll live-only" data-poll="closing"></div>
+      <div class="poll-meta live-only"><span data-poll-total="closing">0</span> votes</div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 58:40 — let the question sit for three seconds before saying anything.
+Glance at the closing poll. If "Polling" or "SSE" got real votes, that's the talk working.
+Then: "Questions."
+  </aside>
+</section>
+
+<section class="t-ws qa-final" data-chapter="6" data-stage="lobby">
+  <p class="huge">Q<em>&amp;</em>A</p>
+  <p class="lead">Reactions still work. Slides, server and demo are in the repo — <code>npm start</code> and it all runs on your laptop.</p>
+  <div class="monday">
+    <div class="k">Three things to try on Monday</div>
+    <div class="grid-3">
+      <div class="card tight" style="--accent:var(--c-poll)"><div class="k">Polling</div><h3>Find one polling loop.</h3><p>Add <code>ETag</code> / <code>304</code> and back off when the tab is hidden.</p></div>
+      <div class="card tight" style="--accent:var(--c-sse)"><div class="k">WebSocket</div><h3>Find one socket that only listens.</h3><p>Could it be an <code>EventSource</code> and ten lines?</p></div>
+      <div class="card tight" style="--accent:var(--c-hook)"><div class="k">Webhooks</div><h3>Find one webhook handler.</h3><p>Send it the same event twice. What happens?</p></div>
+    </div>
+  </div>
+  <aside class="notes">
+⏱ 59:15 — Time-box to the hour.
+Park scaling, CRDTs and Kafka as office-hours topics.
+If asked "how do I scale WebSockets": sticky connections or a pub/sub layer (Redis, NATS) behind the socket servers — a backend design review, not a React problem.
+Thank the room.
+  </aside>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     APPENDIX
+     ════════════════════════════════════════════════════════════════ -->
+
+<section class="t-ws" data-chapter="6">
+  <div class="eyebrow"><span class="chip">Appendix</span><span class="sep"></span>For after the talk</div>
+  <h2>A production-ish <em>WebSocket hook.</em></h2>
+  <div class="body">
+    <div class="split l-wide top">
+      <div class="codebox xs"><span class="file">useSocket.js</span>
+<pre><code class="language-js" data-trim data-noescape>
+export function useSocket(url, onMessage, resync) {
+  useEffect(() => {
+    let socket, timer, retry = 0, closed = false;
+
+    const connect = () => {
+      socket = new WebSocket(url);
+      socket.onopen = () => { retry = 0; resync(); };
+      socket.onmessage = (e) => onMessage(JSON.parse(e.data));
+      socket.onclose = () => {
+        if (closed) return;
+        const base = Math.min(30_000, 1000 * 2 ** retry++);
+        timer = setTimeout(connect, base * (0.5 + Math.random()));
+      };
+    };
+
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(timer);
+      socket.close(1000);
+    };
+  }, [url]);
+}
+</code></pre>
+      </div>
+      <ol class="points num sm">
+        <li><span><b>Exponential backoff</b> capped at 30 s — don't hammer a server that's already struggling.</span></li>
+        <li><span><b>Jitter</b> (<code>0.5 + random</code>) spreads reconnects after a deploy so they don't arrive in the same second.</span></li>
+        <li><span><b>Resync on open</b> — refetch the snapshot or send your last-seen id.</span></li>
+        <li><span><b>The closed flag</b> prevents reconnecting after unmount (and Strict Mode's double mount).</span></li>
+        <li><span>Not shown: heartbeats, auth refresh, a message queue while disconnected. That's why libraries exist.</span></li>
+      </ol>
+    </div>
+  </div>
+  <aside class="notes">Appendix — only if someone asks about reconnection in Q&amp;A.</aside>
+</section>
+
+<section class="t-db" data-chapter="6">
+  <div class="eyebrow"><span class="chip">Appendix</span><span class="sep"></span>Look inside the demo</div>
+  <h2>The demo's “realtime DB”: <em>just a WebSocket.</em></h2>
+  <div class="body">
+    <div class="split top">
+      <div class="codebox"><span class="file">public/js/realtime-client.js (excerpt)</span>
+<pre><code class="language-js" data-trim data-noescape>
+channel(name) {
+  const handlers = [];
+  const channel = {
+    on: (type, filter, cb) => {
+      handlers.push({ filter, cb });
+      return channel;
+    },
+    subscribe: (onStatus) => {
+      this.#channels.push({ handlers, onStatus });
+      this.#join();          // sends realtime:subscribe
+      return channel;
+    },
+  };
+  return channel;
+}
+</code></pre>
+      </div>
+      <div class="stack">
+        <div class="card flat"><div class="k">Server side</div><p><code>server/db.js</code> emits a change event on every committed write. <code>server/server.js</code> forwards matching changes to subscribers — nobody calls broadcast from route handlers.</p></div>
+        <div class="card flat"><div class="k">Client side</div><p>A Supabase-shaped API — <code>channel().on('postgres_changes').subscribe()</code> — built on one WebSocket with reconnect, re-join and resync.</p></div>
+        <div class="callout">About 80 lines. The abstraction is real, and it's also <b>not magic</b>.</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Appendix — the "abstractions over infrastructure" point, made concrete with the demo code.</aside>
+</section>
+
+    </div>
+  </div>
+
+  <div class="hud" data-hud>
+    <span class="brand">Real-Time Web</span>
+    <div class="chapters">
+      <div class="ch" data-ch="0">Intro<i></i></div>
+      <div class="ch" data-ch="1">Communication<i></i></div>
+      <div class="ch" data-ch="2">Data<i></i></div>
+      <div class="ch" data-ch="3">Webhooks<i></i></div>
+      <div class="ch" data-ch="4">Architecture<i></i></div>
+      <div class="ch" data-ch="5">Demo<i></i></div>
+      <div class="ch" data-ch="6">Choose<i></i></div>
+    </div>
+    <span class="aud hidden" data-live="hud-count">0 connected</span>
+  </div>
+  <div class="reactions" data-reactions></div>
+
+  <script src="/vendor/reveal/dist/reveal.js"></script>
+  <script src="/vendor/reveal/plugin/notes/notes.js"></script>
+  <script src="/vendor/reveal/plugin/highlight/highlight.js"></script>
+  <script type="module" src="/js/deck.js"></script>
+</body>
+</html>
