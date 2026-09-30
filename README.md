@@ -17,7 +17,7 @@ Requires Node 20+. The server prints three URLs:
 | --- | --- |
 | `http://localhost:4173` | **The deck.** Present from this URL on the presenting laptop. |
 | `http://localhost:4173/dashboard` | The live order dashboard (also embedded in the demo slide). |
-| `http://<your-LAN-IP>:4173/join` | The audience page. It's what the QR code on slide 2 points to. |
+| `http://<your-LAN-IP>:4173/join` | The audience page. Share this link with the room so phones can join (the server also serves a QR code for it at `/api/qr.svg`). |
 
 Press **S** in the deck to open the speaker view with notes and timing cues (⏱). Press **F** for fullscreen and **Esc** for the overview.
 
@@ -25,12 +25,9 @@ Press **S** in the deck to open the speaker view with notes and timing cues (⏱
 
 ## What the audience experiences
 
-1. **Slide 2:** they scan the QR code and their phone joins. A live counter climbs and reactions float across the screen.
-2. **Slide 3:** the opening poll ("How does your browser know something changed?"). Bars update live.
-3. **Quiz (end of chapter 1):** which transport would you pick for order tracking? The answer is revealed on click.
-4. **Plot twist:** their phones were on **Server-Sent Events** the whole time, not WebSockets. Each phone shows how long it's been connected and how many messages it received.
-5. **Demo, Act II:** every phone gets a "Pay" button. The first tap triggers a signed Stripe-style webhook that flips order #1023 to paid. Everyone else sees "someone was faster": idempotency, experienced first-hand.
-6. **Closing poll:** "What will you reach for first next time?"
+1. **Slide 2:** the agenda. It flags the moments they'll use their phone.
+2. **Slide 3:** they open the join link, their phone joins and they vote in the opening poll ("How does your browser know something changed?"). The phone counter and the bars update live, and reactions float across the screen.
+3. **Demo, Act II:** every phone gets a "Pay" button. The first tap triggers a signed Stripe-style webhook that flips order #1023 to paid. Everyone else sees "someone was faster": idempotency, experienced first-hand.
 
 The phone "stage" follows the slides automatically. Slides and fragments set it with `data-stage`.
 
@@ -82,13 +79,13 @@ If nothing works, just continue. Every live widget has an offline fallback (show
 
 | Time | Chapter | Content |
 | --- | --- | --- |
-| 0–5 | Intro | Join QR, opening poll, examples, request/response vs event-driven, thesis, agenda |
-| 5–20 | Communication | Timeline, HTTP, polling, long polling, SSE, WebSockets (handshake, production concerns), comparison, quiz, plot twist |
-| 20–32 | Real-time data | CDC layers, app push vs DB push, Supabase Realtime, frontend responsibilities, trade-offs, alternatives |
-| 32–42 | Webhooks | Why webhooks, anatomy, at-least-once delivery, five rules, "entrance not exit" |
-| 42–47 | Architecture | Animated end-to-end diagram, payment flow step by step, failure modes |
+| 0–5 | Intro | Agenda, opening poll, examples, request/response vs event-driven, thesis, the map |
+| 5–20 | Communication | Timeline, HTTP, polling, long polling, SSE, WebSockets (handshake, production concerns), comparison |
+| 20–32 | Real-time data (Firestore) | The idea, app push vs DB push, `onSnapshot`, React hook, trade-offs |
+| 32–42 | Webhooks | Why webhooks, "entrance not exit", the screen that waits for the webhook |
+| 42–47 | Architecture | Animated end-to-end diagram, payment flow step by step |
 | 47–55 | Live demo | Three acts on the order dashboard |
-| 55–60 | Choosing | Decision tree, cheat sheet, "do I need real-time?", takeaways, final question, Q&A |
+| 55–60 | Wrap-up | Ecosystem recap, takeaways, Q&A |
 
 Two appendix slides (a reconnecting `useSocket` hook, and the demo's realtime client) come after Q&A for questions.
 

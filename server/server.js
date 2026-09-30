@@ -298,15 +298,7 @@ async function fakeStripePay(orderId, who) {
 const POLLS = {
   opening: {
     question: "How does your browser know something changed on the server?",
-    options: ["WebSockets", "Polling", "Server-Sent Events", "It just… does?", "Depends on the problem"],
-  },
-  quiz: {
-    question: "A customer watches an order-tracking page. They never send anything back. Which transport?",
-    options: ["Polling every 2s", "Long polling", "Server-Sent Events", "WebSocket"],
-  },
-  closing: {
-    question: "What will you reach for first next time?",
-    options: ["Polling", "SSE", "WebSocket", "Realtime DB", "Webhooks"],
+    options: ["HTTP request", "WebSockets", "Polling", "Server-Sent Events", "It just… does?", "Depends on the problem"],
   },
 };
 

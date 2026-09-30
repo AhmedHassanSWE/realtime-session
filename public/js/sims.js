@@ -514,52 +514,6 @@ async function runWs(lane, ctx) {
   await ctx.wait(1800);
 }
 
-/* ───────────────────────── Webhook ───────────────────────── */
-
-async function runWebhook(lane, ctx) {
-  lane.reset();
-  let deliveries = 0;
-  let failed = 0;
-  let dupes = 0;
-  lane.setVer("left", "evt");
-  lane.setVer("right", "API");
-
-  while (ctx.alive) {
-    const id = `evt_${Math.random().toString(36).slice(2, 6)}`;
-    lane.setTag("left", "", "");
-    lane.pulse("left");
-    lane.bubble("left", "payment_intent.succeeded", 2000);
-    lane.caption("A payment succeeds at Stripe. It POSTs a <b>signed event</b> to your endpoint.");
-    await ctx.wait(1000);
-
-    await lane.send(ctx, "ltr", `POST ${id}`, { ms: 800 });
-    lane.stat("del", String(++deliveries));
-    lane.bubble("right", "deploy in progress", 1400);
-    await lane.send(ctx, "rtl", "500", { cls: "bad", ms: 650 });
-    lane.stat("fail", String(++failed));
-    lane.caption("Your server was mid-deploy → <b>500</b>. Stripe will retry with backoff.");
-    lane.bubble("left", "retry in 2s…", 1600);
-    await ctx.wait(1900);
-
-    await lane.send(ctx, "ltr", `POST ${id} · retry`, { ms: 800 });
-    lane.stat("del", String(++deliveries));
-    lane.pulse("right");
-    lane.bubble("right", "verify ✓ · UPDATE orders", 1500);
-    await lane.send(ctx, "rtl", "200", { cls: "ok", ms: 650 });
-    lane.caption("Signature verified, order marked paid, <b>200</b>.");
-    await ctx.wait(1500);
-
-    lane.caption("Your 200 was slow… so Stripe sends <b>the same event again</b>.");
-    await lane.send(ctx, "ltr", `POST ${id} · again`, { cls: "ghost", ms: 800 });
-    lane.stat("del", String(++deliveries));
-    lane.bubble("right", `seen ${id} → skip`, 1500);
-    await lane.send(ctx, "rtl", "200 · duplicate", { cls: "ok", ms: 650 });
-    lane.stat("dup", String(++dupes));
-    lane.caption("Same event id → acknowledged, <b>no side effects</b>. Exactly-once effect from at-least-once delivery.");
-    await ctx.wait(2600);
-  }
-}
-
 /* ───────────────────────── registry ───────────────────────── */
 
 const SIMS = {
@@ -625,19 +579,6 @@ const SIMS = {
         { key: "up", label: "Sent ↑" },
         { key: "down", label: "Received ↓" },
         { key: "delay", label: "Avg delay", cls: "good" },
-      ],
-    },
-  },
-  webhook: {
-    run: runWebhook,
-    opts: {
-      title: "webhook delivery",
-      left: { kind: "ext", name: "Stripe", url: "stripe.com" },
-      right: { kind: "server", name: "Your API", url: "/webhooks/stripe" },
-      stats: [
-        { key: "del", label: "Deliveries" },
-        { key: "fail", label: "Failed → retried", cls: "warn" },
-        { key: "dup", label: "Duplicates ignored", cls: "good" },
       ],
     },
   },

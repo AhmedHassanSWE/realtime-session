@@ -11,17 +11,10 @@ const view = document.querySelector("[data-view]");
 const status = document.querySelector("[data-status]");
 const statusText = document.querySelector("[data-status-text]");
 
-const stats = {
-  connectedAt: null,
-  messages: 0,
-  reconnects: 0,
-};
-
 let stage = null;
 let audience = 0;
-let twistTimer = null;
 
-const ACCENTS = { lobby: "#a78bfa", poll: "#38bdf8", pay: "#f472b6", twist: "#38bdf8" };
+const ACCENTS = { lobby: "#a78bfa", poll: "#38bdf8", pay: "#f472b6" };
 
 function setStatus(kind, text) {
   status.className = `status ${kind}`;
@@ -40,19 +33,13 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
 
-function duration(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  return m ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
-}
-
 /* ───────── views ───────── */
 
 function renderLobby() {
   view.innerHTML = `
     <div class="k">You're in</div>
     <h1>Keep this tab <em>open.</em></h1>
-    <p>This screen will change as the talk moves on — a vote, a quiz, and at one point a button that pays for someone's pizza.</p>
+    <p>This screen will change as the talk moves on — a vote, and at one point a button that pays for someone's pizza.</p>
     <p class="muted">Tap a reaction below. It lands on the big screen instantly.</p>
     <div>
       <div class="big-count">${audience}</div>
@@ -63,7 +50,7 @@ function renderLobby() {
 function renderPoll() {
   const { pollData, myVote } = stage;
   view.innerHTML = `
-    <div class="k">${stage.poll === "quiz" ? "Quiz" : "Vote"}</div>
+    <div class="k">Vote</div>
     <h2>${esc(pollData.question)}</h2>
     <div class="options">
       ${pollData.options.map((o, i) => `<button data-opt="${i}" class="${myVote === i ? "chosen" : ""}">${esc(o)}</button>`).join("")}
@@ -104,32 +91,11 @@ function renderPay() {
   });
 }
 
-function renderTwist() {
-  const draw = () => {
-    view.innerHTML = `
-      <div class="k">Plot twist</div>
-      <h1>This page is an <em>EventSource.</em></h1>
-      <p>Every screen you've seen was pushed by the server over Server-Sent Events. Your taps went up as ordinary POST requests.</p>
-      <div class="stats">
-        <div><b>${stats.connectedAt ? duration(Date.now() - stats.connectedAt) : "—"}</b><span>connected</span></div>
-        <div><b>${stats.messages}</b><span>messages pushed</span></div>
-        <div><b>${stats.reconnects}</b><span>auto-reconnects</span></div>
-        <div><b>0</b><span>WebSockets</span></div>
-      </div>
-      <pre>new EventSource('/api/audience/stream')
-Content-Type: text/event-stream</pre>`;
-  };
-  draw();
-  twistTimer = setInterval(draw, 1000);
-}
-
 function render() {
-  clearInterval(twistTimer);
   if (!stage) return;
   document.documentElement.style.setProperty("--accent", ACCENTS[stage.name] ?? ACCENTS.lobby);
   if (stage.name === "poll" && stage.pollData) return renderPoll();
   if (stage.name === "pay") return renderPay();
-  if (stage.name === "twist") return renderTwist();
   return renderLobby();
 }
 
@@ -137,18 +103,10 @@ function render() {
 
 const source = new EventSource(`/api/audience/stream?id=${encodeURIComponent(clientId)}`);
 
-source.onopen = () => {
-  stats.connectedAt ??= Date.now();
-  setStatus("ok", "live · SSE");
-};
-
-source.onerror = () => {
-  stats.reconnects += 1;
-  setStatus("wait", "reconnecting…");
-};
+source.onopen = () => setStatus("ok", "live · SSE");
+source.onerror = () => setStatus("wait", "reconnecting…");
 
 source.addEventListener("stage", (e) => {
-  stats.messages += 1;
   const next = JSON.parse(e.data);
   audience = next.audience ?? audience;
   const changed = !stage || stage.name !== next.name || stage.poll !== next.poll || next.name === "pay";
@@ -157,7 +115,6 @@ source.addEventListener("stage", (e) => {
 });
 
 source.addEventListener("count", (e) => {
-  stats.messages += 1;
   audience = JSON.parse(e.data).audience;
   if (stage?.name === "lobby") {
     const el = view.querySelector(".big-count");
